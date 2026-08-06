@@ -231,17 +231,76 @@ graphs after the sliding window.
 
 ---
 
-## 6. Reproduction run — status
+## 6. Measured cost on CPU (why training moved to a GPU server)
+
+Measured on the Apple M4 Pro (14 cores, CPU-only), Case 04, real data:
+
+| Quantity | Measured |
+| --- | --- |
+| Dataset load (7,495 train + 1,499 val graphs) | 1.5 s |
+| `get_stats` over the full training set | 0.2 s |
+| Model parameters | 734,996 |
+| Batches per epoch (batch size 64) | 118 |
+| **One training epoch** | **~65 s** |
+| One validation rollout (200 autoregressive steps) | 11.9 s |
+
+Projection for the configured 500-epoch schedule: **9.0 h training + 0.3 h
+validation = ~9.3 h for Case 04 alone**, with Case 05 expected to be comparable or
+slower (it adds the external-force MLP). Roughly 19-20 h for both cases on CPU.
+
+**Decision:** training was moved to a CUDA server rather than run on CPU. The
+Case 05 CPU benchmark was cancelled as no longer relevant.
+
+### CPU vs GPU install — corrected guidance
+
+An earlier draft of these files told GPU users to install torch via
+`--index-url .../cu126`. That is **wrong as a general instruction**: the default
+PyPI wheel for `linux-x86_64` *is* the CUDA build. Verified from PyPI metadata for
+torch 2.7.0:
+
+| Platform | Wheel size | Variant |
+| --- | --- | --- |
+| macosx_11_0_arm64 | 68.6 MB | CPU-only |
+| manylinux_2_28_x86_64 | **865.2 MB** | **CUDA 12.6 bundled** |
+| manylinux_2_28_aarch64 | 99.2 MB | CPU-only |
+| win_amd64 | 212.5 MB | CUDA |
+
+So on the GPU server a plain `pip install -r requirements.txt` is sufficient. The
+`--index-url` override is only needed to pin a *different* CUDA version, or to force
+a CPU-only build on Linux. Both spec files now say this.
+
+---
+
+## 7. Publishing to GitHub
+
+Remote: https://github.com/vinay-IMOSEPFL/DynamicalGraphNet-DEM.git (was empty).
+
+`.gitignore` excludes everything regenerable, keeping the repository at **25 files /
+288 KB** instead of ~3.6 GB:
+
+| Excluded | Size | Regenerate with |
+| --- | --- | --- |
+| `case_0*/data/` | ~635 MB | `get_data.py` |
+| `case_0*/dataset/` | ~3.0 GB | `preprocess.py` |
+| `case_0*/saved_models/` | — | `--mode train` |
+| `case_0*/results/` | — | `--mode test` |
+
+Commit authorship: the `Co-Authored-By` trailer was removed at the author's
+request — commits are attributed solely to the researcher.
+
+---
+
+## 8. Reproduction run — status
 
 - [x] Fresh conda env created from `environment.yml`
 - [x] Env verified against `requirements.txt` pins
 - [x] OpenMP conflict found and fixed
 - [x] Zenodo data downloaded (both cases)
-- [x] Preprocess Case 04
-- [ ] Preprocess Case 05 (cylinder in progress)
-- [ ] Measure per-epoch cost, project full training time
-- [ ] Train Case 04
-- [ ] Train Case 05
+- [x] Preprocess Case 04 and Case 05 (incl. 1,999 cylinder graphs)
+- [x] Measure per-epoch cost on CPU, project full training time
+- [x] Push cleaned repository to GitHub
+- [ ] Train Case 04 on CUDA server
+- [ ] Train Case 05 on CUDA server
 - [ ] Evaluate checkpoints, collect metrics, render visualizations
 
-_(numbers to be filled in below as the run proceeds)_
+_(training numbers to be filled in from the server run)_

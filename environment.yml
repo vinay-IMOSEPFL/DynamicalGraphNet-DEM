@@ -1,0 +1,40 @@
+# Conda environment for the Dynami-CAL GraphNet DEM experiments.
+#
+#   conda env create -f environment.yml
+#   conda activate dem-dyngnet
+#
+# CPU / GPU
+# ---------
+# No change is needed for CUDA. The default PyPI wheel for linux-x86_64 is the
+# CUDA build (torch 2.7.0 ships CUDA 12.6), so this file yields a GPU-capable
+# environment on a Linux GPU machine as-is. The macOS wheel is CPU-only.
+# See requirements.txt for how to pin a different CUDA version.
+#
+# WHY CONDA ONLY SUPPLIES PYTHON
+# ------------------------------
+# Every scientific package is installed through pip rather than conda. Mixing
+# conda-forge numpy/scipy (which pull in conda's own `libomp` via OpenBLAS) with
+# the pip PyTorch wheel (which bundles its own `libomp`) puts two OpenMP runtimes
+# in one process. On macOS that aborts the interpreter outright:
+#
+#   OMP: Error #15: Initializing libomp.dylib, but found libomp.dylib already
+#   initialized.
+#
+# The failure is import-order dependent — `import numpy, torch` survives while
+# `import torch, numpy` aborts — so it strikes the pipeline scripts, which import
+# torch first. Sourcing the whole stack from pip leaves exactly one OpenMP runtime
+# (the one inside torch) and removes the conflict on every platform.
+#
+# This also keeps environment.yml and requirements.txt from drifting: the pip
+# list below is simply `-r requirements.txt`.
+
+name: dem-dyngnet
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      - -r requirements.txt

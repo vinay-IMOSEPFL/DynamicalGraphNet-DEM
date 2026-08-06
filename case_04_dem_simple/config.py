@@ -1,0 +1,51 @@
+import os
+
+# ---------------------------------------------------------------------------
+# Directory setup
+# ---------------------------------------------------------------------------
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.dirname(_HERE)
+
+# Base directories
+DATA_DIR = os.path.join(_HERE, "data")
+DATASET_DIR = os.path.join(_HERE, "dataset")
+SAVED_MODELS_DIR = os.path.join(_HERE, "saved_models")
+RESULTS_DIR = os.path.join(_HERE, "results")
+
+# Ensure required directories exist
+for _d in (DATASET_DIR, SAVED_MODELS_DIR, RESULTS_DIR):
+    os.makedirs(_d, exist_ok=True)
+
+# ---------------------------------------------------------------------------
+# Physical constants
+# ---------------------------------------------------------------------------
+GEO_DATA = ((0, 0, 0), (0.03, 0.03, 0.03))
+SPHERE_DIAMETER = 0.005
+SPHERE_RADIUS = SPHERE_DIAMETER / 2.0
+THRESHOLD = 1.25 * SPHERE_DIAMETER  # 1.25 * 0.005
+SAMPLE_TIME_STEP = 1e-4             # 1e-4
+
+# ---------------------------------------------------------------------------
+# Model and training hyperparameters
+# ---------------------------------------------------------------------------
+MODEL_SETTINGS = {
+    "batch_size": 64,       # From train_loader
+    "epochs": 500,
+    "lr": 3e-5,             # From optimizer
+    "nf": 128,              # latent_size
+    "n_layers": 2,
+    "num_msgs": 5,          # From DynamicsSolver init
+    "time_step": SAMPLE_TIME_STEP,
+    "threshold": THRESHOLD,
+    "node_in_f": 1,
+}
+
+# ---------------------------------------------------------------------------
+# Data Splits
+# ---------------------------------------------------------------------------
+SPLIT_DIRS = {
+    "train": ["CASE01", "CASE02", "CASE03", "CASE04", "CASE05"],
+    "val": ["CASE06"],
+    "test": ["CASE07"],
+    "expt": ["1x"]
+}

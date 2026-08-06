@@ -1,0 +1,53 @@
+# ---------------------------------------------------------------------------
+# Generated artifacts — never commit these.
+#
+# Everything below is reproducible from the Zenodo record plus the scripts in
+# this repository, and together it runs to several GB. Regenerate with:
+#   python case_0X_.../get_data.py     -> data/
+#   python case_0X_.../preprocess.py   -> dataset/
+#   python main_dem_*.py --mode train  -> saved_models/
+#   python main_dem_*.py --mode test   -> results/
+# ---------------------------------------------------------------------------
+
+# Raw CSV simulation data downloaded from Zenodo (~635 MB)
+case_04_dem_simple/data/
+case_05_dem_hard/data/
+
+# Preprocessed PyTorch Geometric graph sequences (~3 GB)
+case_04_dem_simple/dataset/
+case_05_dem_hard/dataset/
+
+# Trained checkpoints
+case_04_dem_simple/saved_models/
+case_05_dem_hard/saved_models/
+
+# Rollout outputs: snapshots, PNG frames, GIFs, physics panels
+case_04_dem_simple/results/
+case_05_dem_hard/results/
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# ---------------------------------------------------------------------------
+# Tooling / OS
+# ---------------------------------------------------------------------------
+.DS_Store
+.ipynb_checkpoints/
+.vscode/
+.idea/
+*.swp

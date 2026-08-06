@@ -1,0 +1,35 @@
+# Software environment for the Dynami-CAL GraphNet DEM experiments.
+#
+#   pip install -r requirements.txt
+#
+# CPU / GPU
+# ---------
+# No change is needed for CUDA. The default PyPI wheel for linux-x86_64 is the
+# CUDA build (torch 2.7.0 ships CUDA 12.6; the wheel is ~865 MB for this reason),
+# so a plain `pip install -r requirements.txt` on a Linux GPU machine gives GPU
+# support out of the box. The macOS wheel is CPU-only, which is expected.
+#
+# Only override if you need a *different* CUDA version than the default, or a
+# deliberately CPU-only build on Linux:
+#   pip install torch==2.7.0 --index-url https://download.pytorch.org/whl/cu118
+#   pip install torch==2.7.0 --index-url https://download.pytorch.org/whl/cpu
+#
+# Notes
+# -----
+# PyTorch version floor: preprocessed graphs are PyTorch Geometric `Data` objects
+# loaded with `weights_only=False`, which is required from PyTorch 2.6 onwards
+# where the `torch.load` default flipped to `weights_only=True`.
+#
+# torch-geometric: only `Data` and `DataLoader` are used, so the optional compiled
+# extensions (torch-scatter, torch-sparse, torch-cluster) are NOT required.
+
+torch==2.7.0
+torch-geometric==2.6.1
+
+numpy==1.26.4
+pandas==2.2.2
+
+matplotlib==3.9.2
+seaborn==0.13.2
+imageio==2.33.1
+tqdm==4.66.5

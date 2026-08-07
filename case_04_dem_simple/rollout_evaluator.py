@@ -1,9 +1,9 @@
 """
-Autoregressive Rollout Evaluator for Homogeneous DEM Physics.
+Autoregressive rollout evaluation for the homogeneous DEM cases.
 
-This module handles the long-horizon evaluation of the trained Graph Neural Network.
-Instead of 1-step predictions, it feeds the model's own predictions back into itself 
-over hundreds or thousands of steps to measure long-term physical stability and error accumulation.
+The model consumes its own predictions for the full length of the rollout, with no
+ground truth injected after the initial state. Ground truth is read only to measure
+error, so the reported values reflect accumulated drift rather than one-step accuracy.
 """
 
 import os

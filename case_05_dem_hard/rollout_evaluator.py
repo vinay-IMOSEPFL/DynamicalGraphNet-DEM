@@ -1,9 +1,9 @@
 """
-Autoregressive Rollout Evaluator for Heterogeneous DEM Physics.
+Autoregressive rollout evaluation for the heterogeneous DEM cases.
 
-This module handles the long-horizon evaluation of the trained Graph Neural Network.
-Instead of 1-step predictions, it feeds the model's own predictions back into itself 
-over hundreds or thousands of steps to measure long-term physical stability and error accumulation.
+The model consumes its own predictions for the full length of the rollout, with no
+ground truth injected after the initial state. Ground truth is read only to measure
+error, so the reported values reflect accumulated drift rather than one-step accuracy.
 """
 
 import os
@@ -45,24 +45,20 @@ def evaluate_rollout(test_loader, model, interaction, device, train_stats,
                      experiment_name='Val', save_folder='.', 
                      plot_region=(-0.03, 0.03), bottom_wall=False):
     """
-    Executes a multi-step autoregressive rollout of the dynamics model.
+    Run an autoregressive rollout and return per-step scaled errors and trajectories.
 
-    ===========================================================================
-    THE DUAL-TIMESTEP APPROACH (Why we use dt_model and dt_loader)
-    ===========================================================================
-    High-fidelity DEM simulations generate massive amounts of data. To keep the 
-    dataset storage sizes manageable on disk, the ground truth simulation was 
-    saved at a lower frequency (e.g., dt_loader = 1e-3 seconds). 
-    
-    However, for the Graph Neural Network to maintain numerical stability and 
-    accurately resolve high-speed collisions, it must integrate physics at a 
-    much finer temporal resolution (e.g., dt_model = 1e-4 seconds).
-    
-    This function bridges that gap using "micro-stepping". The model takes 
-    multiple internal physics steps (`microsteps_per_sync = 10`) before it 
-    checks its state against the next available ground truth frame fetched 
-    from the dataset loader.
-    ===========================================================================
+    Dual timestep
+    -------------
+    The cylinder ground truth was saved every `dt_loader` = 1e-3 s to keep the dataset
+    to a manageable size, but the model must integrate at `dt_model` = 1e-4 s to resolve
+    contact events. The rollout therefore takes `microsteps_per_sync` internal steps
+    between consecutive ground truth frames, comparing states only where the two clocks
+    coincide. For the cuboid cases the two timesteps are equal and this reduces to one
+    model step per frame.
+
+    Returns:
+        (pos_err, vel_err, angvel_err, predicted_traj, groundtruth_traj) - the three error
+        sequences are dimensionless, scaled by the training-set maxima in `train_stats`.
     """
     model.eval()
     
@@ -105,8 +101,8 @@ def evaluate_rollout(test_loader, model, interaction, device, train_stats,
         except StopIteration:
             return [], [], [], [], []
             
-        # The boundary models always prepend real particles before ghost particles.
-        # Counting the zeros cleanly isolates the real particles for ultra-fast slicing.
+        # Boundary models order real particles before ghosts, so the count of zero-valued
+        # node features gives the split point and real particles can be sliced directly.
         N_real = (g0.node_feat.squeeze(1) == 0).sum().item()
 
         # Initialize the rollout state using the real particles from the first frame

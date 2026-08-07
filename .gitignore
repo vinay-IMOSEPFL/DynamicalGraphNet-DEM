@@ -18,12 +18,22 @@ case_04_dem_simple/dataset/
 case_05_dem_hard/dataset/
 
 # Trained checkpoints
-case_04_dem_simple/saved_models/
-case_05_dem_hard/saved_models/
+# Trained checkpoints ARE tracked (3 MB each) so the evaluation modes can be run
+# without retraining first. Any other contents of these folders are not.
+case_04_dem_simple/saved_models/*
+case_05_dem_hard/saved_models/*
+!case_04_dem_simple/saved_models/model_checkpoint_best_val.pth
+!case_05_dem_hard/saved_models/model_checkpoint_best_val.pth
 
 # Rollout outputs: snapshots, PNG frames, GIFs, physics panels
 case_04_dem_simple/results/
 case_05_dem_hard/results/
+
+# Reproduction-run byproducts: training/evaluation logs and archived superseded runs.
+# Both are large (tens of MB) and regenerable; reports/ is deliberately NOT ignored
+# because the metrics summary and training curves are small and worth versioning.
+logs/
+archive_run1_lr3e-5_500ep/
 
 # ---------------------------------------------------------------------------
 # Python

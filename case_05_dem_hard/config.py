@@ -29,22 +29,22 @@ SAMPLE_TIME_STEP_CUBOID = 1e-4
 
 # 2. Rotating Cylinder Setup (Extrapolation Rollout)
 GEO_DATA_CYLINDER = ((-0.05, -0.048, 0.0), (0.05, 0.052, 0.1))
-SAMPLE_TIME_STEP_CYLINDER = 1e-3  # Slower sampling frequency for the massive rollout
+SAMPLE_TIME_STEP_CYLINDER = 1e-3  # Ground truth save interval for the cylinder case
 
 # ---------------------------------------------------------------------------
 # Model and training hyperparameters
 # ---------------------------------------------------------------------------
 MODEL_SETTINGS = {
-    "batch_size": 64,       
-    "epochs": 500,          
-    "lr": 3e-4,             
-    "nf": 128,              
+    "batch_size": 64,
+    "epochs": 200,
+    "lr": 3e-4,
+    "nf": 128,
     "n_layers": 2,
-    "num_msgs": 5,          
+    "num_msgs": 5,
     "time_step": SAMPLE_TIME_STEP_CUBOID,
     "threshold": THRESHOLD,
     "node_in_f": 1,
-    "use_ext_force": True,  
+    "use_ext_force": True,
 }
 
 # ---------------------------------------------------------------------------

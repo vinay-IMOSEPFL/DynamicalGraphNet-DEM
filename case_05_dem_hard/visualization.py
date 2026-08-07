@@ -1,18 +1,14 @@
 """
-Visualization Utilities for Discrete Element Method (DEM) Rollouts.
+Plotting utilities for the heterogeneous DEM rollouts.
 
-This module provides a comprehensive suite of 3D plotting and charting tools 
-to visualize neural network physics predictions against ground truth DEM data. 
+Extends the homogeneous case's cuboid and oblique-wall rendering with:
 
-Expansion from the Simple Case:
-In addition to the standard cuboidal bounding box and oblique wall visualizations 
-(which rely on basic Cartesian surface plotting), this module has been expanded 
-to support complex heterogeneous geometries. Specifically, it now includes:
-1. Parametric rendering of rotating cylindrical drums (curved surfaces + flat caps).
-2. Orientation transformations (Y-Z axis swapping) to properly align the cylinder horizontally with the ground truth data (in DEM simulator MFiX the axes are different than in standard python).
-3. Low-polygon sphere rendering optimizations (`plot_sphere_cyl`) to maintain 
-   memory efficiency and rendering speed when visualizing massive systems (e.g., 2000+ particles).
-4. Dynamic physics panels to validate the conservation laws in time.
+1. Parametric rendering of the rotating cylindrical drum (curved surface and flat caps).
+2. A Y-Z axis swap, needed because MFiX orients the cylinder axis differently from the
+   convention used by Matplotlib's 3D axes.
+3. A reduced-resolution sphere mesh (`plot_sphere_cyl`), which keeps memory and render
+   time tractable for the 2,073-sphere cylinder frames.
+4. Physics panels tracking conservation quantities over the rollout.
 """
 
 import os
@@ -189,7 +185,7 @@ def swap_y_z(point):
 def plot_sphere_cyl(ax, center, radius, color):
     """
     Isolated sphere plotting optimized for cylinders. 
-    Applies the axis swap and uses a lower resolution mesh for faster rendering of massive particle sets.
+    Applies the axis swap and uses a reduced-resolution mesh to keep large frames tractable.
     """
     center_swapped = swap_y_z(center)
     u = np.linspace(0, 2 * np.pi, 8) 
@@ -291,7 +287,7 @@ def plot_snapshot_cyl(predicted_node_pos, groundtruth_node_pos, sim_time, frame_
     os.makedirs(plot_folder_path, exist_ok=True)
     save_path = os.path.join(plot_folder_path, f'frame_{frame_idx:04d}.png')
     
-    # Lower DPI ensures the massive number of particles doesn't stall the rendering pipeline
+    # Reduced DPI keeps render time acceptable at this particle count
     plt.savefig(save_path, bbox_inches='tight', dpi=100)
     plt.close(fig)
 

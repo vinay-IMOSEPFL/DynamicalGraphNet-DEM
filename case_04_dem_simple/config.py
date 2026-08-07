@@ -30,8 +30,8 @@ SAMPLE_TIME_STEP = 1e-4             # 1e-4
 # ---------------------------------------------------------------------------
 MODEL_SETTINGS = {
     "batch_size": 64,       # From train_loader
-    "epochs": 500,
-    "lr": 3e-5,             # From optimizer
+    "epochs": 200,          # Paper: "Training was conducted for 200 epochs"
+    "lr": 3e-4,             # Paper: "a learning rate of 3 x 10^-4", Adam
     "nf": 128,              # latent_size
     "n_layers": 2,
     "num_msgs": 5,          # From DynamicsSolver init

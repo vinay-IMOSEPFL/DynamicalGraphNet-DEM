@@ -823,5 +823,84 @@ Done on the author's instruction, after the results above were measured:
 - [x] All GIFs and physics panels rendered
 - [x] Boundary interaction range investigated and documented (§21)
 - [x] Repository cleaned for publication; checkpoints tracked (§22)
+- [x] Boundary-model experiments run and reverted (§23)
+- [x] Reproduction scaffolding removed from the pipeline (§24)
 - [ ] Decision on the wall interaction range (§21.4) — needs re-preprocess + retrain
 - [ ] Seed-variance study (none run)
+
+## 23. Boundary-model experiments — all tried, all reverted
+
+Four modifications were tested against the shipped baseline and **none were kept**. Recorded
+because the negative results are informative and cheap to repeat otherwise.
+
+| Configuration | Best val | case_07 pos MAE (mean/final) | Escapes @600 |
+| --- | --- | --- | --- |
+| **Baseline (shipped, kept)** | 7.078e-02 | **1.766 / 2.513** | **15/60** |
+| `edge_dx / dx_norm_max` instead of min-max scaling | 7.176e-02 | 2.093 / 3.193 | 12/60 |
+| Own-image ghost edges only, 200 epochs | 8.302e-02 | 7.480 / 14.07 | 26/60 |
+| Own-image + nearest wall only, 200 epochs | 1.236e-01 | 8.105 / 14.08 | 30/60 |
+| Own-image only, early stopping (875 epochs) | **6.636e-02** | 5.243 / 8.994 | 18/60 |
+
+### 23.1 The cross-image edges are load-bearing
+
+The shipped code lets a sphere bond with the mirror image of a *different* sphere. That is
+unphysical, and it is also rare in training (28 cross-image edges across all sampled
+training frames) but common at rollout time — up to **172 of 216** wall edges at one step,
+because predicted states let spheres overlap in ways ground-truth DEM never does.
+
+Removing them alone made rollouts **worse**, not better. A controlled isolation test —
+same checkpoint, only the rollout topology changed — attributed the bulk of the damage to
+the topology itself rather than to run-to-run variance:
+
+| Configuration | case_07 pos MAE mean |
+| --- | --- |
+| baseline checkpoint + baseline topology | 1.766 |
+| baseline checkpoint + own-image topology | **5.869** (3.3x worse) |
+| own-image checkpoint + own-image topology | 7.480 |
+
+Interpretation: the spurious edges were supplying extra wall repulsion that partially
+compensates for how briefly a sphere stays inside the interaction band. Removing them
+exposes the under-resolved contact instead of fixing it.
+
+### 23.2 Longer training helps but does not close the gap
+
+Given 10,000 epochs with early stopping (patience 50 evaluations = 250 epochs), the
+own-image model stopped at epoch 875 with its best score at epoch 625. It reached the
+**best validation score of the whole study** (6.636e-02, better than baseline's 7.078e-02)
+yet remained **3.0x worse** on the 1499-step `case_07` rollout.
+
+That split is the useful finding: validation is a 200-step rollout, the test is 1499 steps.
+The physically-cleaner graph yields a better short-horizon model and a less stable
+long-horizon one. Both statements are true; they measure different things.
+
+### 23.3 Correction to §21
+
+§21 called the doubled sphere-ghost separation a defect that "halves the wall band". That
+framing was wrong. A sphere touching the wall sits at `d = r`, so its image is `2d = 5.0e-3`
+away — exactly the centre distance of two spheres in contact. In image space the wall is an
+identical mirror sphere, with contact and cutoff at the same values as a particle pair. The
+image method is correct; what is genuinely short is the **time** spent in the band
+(~1.6 timesteps at 4 m/s), and a sphere-sphere collision at the same relative speed gets the
+same 1.6 steps. The asymmetry claimed in §21 does not exist.
+
+**Decision: revert to the shipped baseline.** It has the best long-horizon rollout, and the
+evidence shows the escape behaviour is a contact-resolution problem rather than something
+the ghost-edge topology can fix on its own.
+
+## 24. Reproduction scaffolding removed
+
+The instrumentation added for this reproduction was stripped so the published pipeline is
+the author's original code:
+
+- `utils/metrics_dump.py`, `scripts/` and `reports/` deleted.
+- `main_dem_simple.py` and `main_dem_hard.py` restored to their pre-reproduction state —
+  no timing wrappers, no metric dumps, no per-epoch loss print, no `checkpoint_loaded` flag.
+
+Retained, because they are not scaffolding: the three blocking-defect fixes (§1), the
+paper-aligned hyperparameters (§14), the docstring cleanup (§22), the trained checkpoints,
+`README.md` and this log.
+
+One consequence to be aware of: restoring the original checkpoint-loading blocks reinstates
+the silent-evaluation behaviour of §3 — Case 05 prints **nothing** when the checkpoint is
+missing and proceeds with random weights. This is the author's original code and is
+documented in `README.md`, but it is now shipped deliberately rather than fixed.

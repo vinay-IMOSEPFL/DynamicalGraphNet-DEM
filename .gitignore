@@ -30,10 +30,9 @@ case_04_dem_simple/results/
 case_05_dem_hard/results/
 
 # Reproduction-run byproducts: training/evaluation logs and archived superseded runs.
-# Both are large (tens of MB) and regenerable; reports/ is deliberately NOT ignored
-# because the metrics summary and training curves are small and worth versioning.
+# Both are large (tens of MB) and regenerable from the pipeline.
 logs/
-archive_run1_lr3e-5_500ep/
+archive_*/
 
 # ---------------------------------------------------------------------------
 # Python

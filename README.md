@@ -20,8 +20,7 @@ DynamicalGraphNet-DEM/
 │   └── model_dem.py                  # DynamicsSolver GNN architecture
 ├── utils/
 │   ├── trainer_dem.py                # Training loop, gradient accumulation, checkpointing
-│   ├── utils_dem.py                  # MLP builder, momentum and energy helpers
-│   └── metrics_dump.py               # Serialises rollout errors to JSON/CSV
+│   └── utils_dem.py                  # MLP builder, momentum and energy helpers
 │
 ├── case_04_dem_simple/               # Homogeneous interaction cases
 │   ├── config.py                     # Hyperparameters, geometry, directory paths
@@ -42,16 +41,9 @@ DynamicalGraphNet-DEM/
 │   ├── render_frames.py              # Standalone renderer for saved .pt snapshots
 │   └── visualization.py
 │
-├── scripts/
-│   ├── run_training.sh               # Detached training launcher with timestamped logs
-│   ├── run_eval.sh                   # Detached evaluation launcher
-│   ├── collect_metrics.py            # Aggregates all metrics.json into one table
-│   └── parse_training_log.py         # Loss and validation curves from a training log
-│
 ├── main_dem_simple.py                # Entry point for Case 04
 ├── main_dem_hard.py                  # Entry point for Case 05
 │
-├── reports/                          # Metrics summary and training curves
 ├── decisions.md                      # Reproduction log: measurements, deviations, findings
 ├── environment.yml                   # Pinned Conda environment
 └── requirements.txt                  # Pinned pip requirements
@@ -171,15 +163,13 @@ case_04_dem_simple/saved_models/model_checkpoint_best_val.pth
 case_05_dem_hard/saved_models/model_checkpoint_best_val.pth
 ```
 
-They are the ones the metrics in `reports/metrics_summary.md` were measured with, so the evaluation modes below can be run directly without training first.
+Both were trained with the hyperparameters below, so the evaluation modes can be run directly without training first.
 
-If you retrain, note that a **missing** checkpoint does not stop evaluation — the pipeline proceeds with randomly initialized weights and still writes plausible-looking GIFs and physics panels. Every evaluation mode prints either
+If you retrain, note that a **missing** checkpoint does not stop evaluation — the pipeline proceeds with randomly initialized weights and still writes plausible-looking GIFs and physics panels. Case 04's `--mode test` prints a warning in that situation; **Case 05 prints nothing at all**. Before treating any output as a result, confirm the log contains
 
 ```
 Loaded best validation model from .../model_checkpoint_best_val.pth
 ```
-
-or an explicit warning. Confirm the former appears before treating any output as a result; `metrics.json` also records a `checkpoint_loaded` flag for each run.
 
 ---
 
@@ -232,27 +222,14 @@ The cylinder run is the expensive one: 1,998 sync points × 10 micro-steps ≈ 2
 
 ## Metrics
 
-Every evaluation writes `metrics.json` and `per_step_errors.csv` into a `metrics/` folder beside its results, recording mean and final scaled MAE for position, velocity and angular velocity, the rollout length, wall-clock time, and whether the checkpoint loaded.
+`evaluate_rollout` returns per-step error sequences for position, velocity and angular
+velocity. They are **dimensionless**, divided by training-set maxima: `edge_feat_max` for
+position (6.25×10⁻³ m — the interaction cutoff, not the box size), `node_vel_max` for
+velocity, and `node_angvel_max` for angular velocity. During training the mean of the three
+is printed every 5 epochs as the validation score used for checkpoint selection.
 
-Aggregate them into one table:
-
-```bash
-python scripts/collect_metrics.py          # -> reports/metrics_summary.{md,csv,json}
-```
-
-Plot loss and validation curves from a training log:
-
-```bash
-python scripts/parse_training_log.py logs/train_case04_<stamp>.log --tag case04
-```
-
-Errors are dimensionless, divided by training-set maxima: `edge_feat_max` for position (6.25×10⁻³ m, the interaction cutoff — not the box size), `node_vel_max` for velocity, `node_angvel_max` for angular velocity.
-
-For long unattended runs, `scripts/run_training.sh` and `scripts/run_eval.sh` launch a case detached under `setsid` with timestamped logs, so the run survives the controlling terminal exiting:
-
-```bash
-setsid nohup ./scripts/run_training.sh case04 0 &   # case, GPU index
-```
+The pipeline does not serialize these sequences; capture them from the returned values if
+you need them for downstream analysis.
 
 ---
 

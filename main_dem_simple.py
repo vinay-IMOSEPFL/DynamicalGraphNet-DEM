@@ -13,7 +13,6 @@ Modes:
 
 import os
 import shutil
-import time
 import torch
 import numpy as np
 import random
@@ -28,7 +27,6 @@ from case_04_dem_simple.boundary_model import SphereWallInteraction, insert_boun
 # Neural Network modules and utilities
 from model.model_dem import DynamicsSolver
 from utils.trainer_dem import Trainer, train_one_epoch
-from utils.metrics_dump import dump_rollout_metrics, dump_oblique_wall_summary
 from case_04_dem_simple.rollout_evaluator import evaluate_rollout
 
 def set_seed(seed=100):
@@ -122,10 +120,11 @@ def main():
         print(f"Training for {epochs} epochs...")
         for epoch in range(epochs):
             train_loss = train_one_epoch(trainer, train_loader, pbar_desc=f"Epoch {epoch+1}/{epochs}", accumulation_steps=accumulation_steps)
-            print(f"Epoch {epoch+1}/{epochs} | Train Loss (MSE): {train_loss:.6e}")
-
+            
             # Periodically evaluate the model's rollout stability on the validation set
             if (epoch + 1) % eval_frequency == 0 or epoch == 0:
+                print(f"\nEpoch {epoch+1} Train Loss (MSE): {train_loss:.4e}")
+                
                 val_pos_err, val_vel_err, val_angvel_err, _, _ = evaluate_rollout(
                     test_loader=val_loader,
                     model=model,
@@ -165,18 +164,16 @@ def main():
         
         # Restore the best weights from training
         best_model_path = os.path.join(trainer.model_dir, "model_checkpoint_best_val.pth")
-        checkpoint_loaded = os.path.exists(best_model_path)
-        if checkpoint_loaded:
+        if os.path.exists(best_model_path):
             model.load_state_dict(torch.load(best_model_path, map_location=device))
             print(f"Loaded best validation model from {best_model_path}")
         else:
             print(f"Warning: Checkpoint not found at {best_model_path}. Evaluating with uninitialized weights.")
-
+        
         print(f"\nStarting Final Rollout on {case_name} (Plotting: {args.plot} | Save Data: {args.save_data})...")
-
+        
         plot_limit_upper = GEO_DATA[1][0] if len(GEO_DATA) > 1 else 0.03
 
-        _t0 = time.perf_counter()
         pos_err, vel_err, angvel_err, predicted_traj_sys, grndtruth_traj_sys = evaluate_rollout(
             test_loader=expt_loader,
             model=model,
@@ -193,15 +190,7 @@ def main():
             plot_region=(GEO_DATA[0][0], plot_limit_upper),
             bottom_wall=False
         )
-        _elapsed = time.perf_counter() - _t0
-
-        dump_rollout_metrics(
-            RESULTS_DIR, f'{case_name}_rollout', pos_err, vel_err, angvel_err, _elapsed,
-            extra={"case": "case_04_dem_simple", "mode": "test", "evaluated_case": case_name,
-                   "device": str(device), "checkpoint_loaded": checkpoint_loaded,
-                   "checkpoint_path": best_model_path}
-        )
-
+        
         # Post-process visualization artifacts
         if args.plot:
             from case_04_dem_simple.visualization import create_gif, plot_physics_panel
@@ -245,34 +234,22 @@ def main():
         expt_loader = DataLoader(expt_dataset, batch_size=1, shuffle=False)
         
         best_model_path = os.path.join(trainer.model_dir, "model_checkpoint_best_val.pth")
-        checkpoint_loaded = os.path.exists(best_model_path)
-        if checkpoint_loaded:
+        if os.path.exists(best_model_path):
             model.load_state_dict(torch.load(best_model_path, map_location=device))
-            print(f"Loaded best validation model from {best_model_path}")
-        else:
-            print(f"Warning: Checkpoint not found at {best_model_path}. Evaluating with uninitialized weights.")
-
+            print(f"Loaded best model from {best_model_path}")
+        
         # Force a massively expanded bounding box so the two spheres only interact with each other,
         # effectively simulating free space dynamics.
         geo_sphere = ((-100.0, -100.0, -100.0), (100.0, 100.0, 100.0))
         bounds_sphere = insert_boundary(geo_sphere, device='cpu')
         interaction_sphere = SphereWallInteraction(bounds_sphere, THRESHOLD, device='cpu')
-
+        
         print(f"\nStarting Rollout: Oblique Sphere Collisions...")
-        _t0 = time.perf_counter()
-        pos_err, vel_err, angvel_err, pred_traj, gt_traj = evaluate_rollout(
+        _, _, _, pred_traj, gt_traj = evaluate_rollout(
             test_loader=expt_loader, model=model, interaction=interaction_sphere,
             device=device, train_stats=train_stats, time_step=SAMPLE_TIME_STEP,
             start=0, end=len(expt_loader), plot=args.plot, save_data=args.save_data, frequency=5,
             experiment_name=f'benchmark_{case_name}', save_folder=RESULTS_DIR
-        )
-        _elapsed = time.perf_counter() - _t0
-
-        dump_rollout_metrics(
-            RESULTS_DIR, f'benchmark_{case_name}', pos_err, vel_err, angvel_err, _elapsed,
-            extra={"case": "case_04_dem_simple", "mode": "benchmark_sphere_collisions",
-                   "evaluated_case": case_name, "device": str(device),
-                   "checkpoint_loaded": checkpoint_loaded, "checkpoint_path": best_model_path}
         )
 
         if args.plot:
@@ -296,13 +273,10 @@ def main():
         angles = [10, 30, 45, 60, 90]
         
         best_model_path = os.path.join(trainer.model_dir, "model_checkpoint_best_val.pth")
-        checkpoint_loaded = os.path.exists(best_model_path)
-        if checkpoint_loaded:
+        if os.path.exists(best_model_path):
             model.load_state_dict(torch.load(best_model_path, map_location=device))
-            print(f"Loaded best validation model from {best_model_path}")
-        else:
-            print(f"Warning: Checkpoint not found at {best_model_path}. Evaluating with uninitialized weights.")
-
+            print(f"Loaded best model from {best_model_path}")
+        
         # Override the boundaries to feature a single solid plane at Z=0.
         geo_oblique = ((-100.0, -100.0, 0.0), (100.0, 100.0, 100.0))
         bounds_oblique = insert_boundary(geo_oblique, device='cpu')
@@ -321,22 +295,13 @@ def main():
             expt_dataset = DemDataset(DATASET_DIR, case_name=case_name)
             expt_loader = DataLoader(expt_dataset, batch_size=1, shuffle=False)
             
-            _t0 = time.perf_counter()
-            pos_err, vel_err, angvel_err, pred_traj, gt_traj = evaluate_rollout(
+            _, _, _, pred_traj, gt_traj = evaluate_rollout(
                 test_loader=expt_loader, model=model, interaction=interaction_oblique,
                 device=device, train_stats=train_stats, time_step=SAMPLE_TIME_STEP,
-                start=0, end=len(expt_loader), plot=False, save_data=False,
+                start=0, end=len(expt_loader), plot=False, save_data=False, 
                 experiment_name=f'benchmark_oblique_{angle}deg', save_folder=RESULTS_DIR
             )
-            _elapsed = time.perf_counter() - _t0
-
-            dump_rollout_metrics(
-                RESULTS_DIR, f'benchmark_oblique_{angle}deg', pos_err, vel_err, angvel_err, _elapsed,
-                extra={"case": "case_04_dem_simple", "mode": "benchmark_wall_collisions",
-                       "impact_angle_deg": angle, "device": str(device),
-                       "checkpoint_loaded": checkpoint_loaded, "checkpoint_path": best_model_path}
-            )
-
+            
             # Extract the post-collision angular velocity from the final predicted timestep
             # Tensor Shape: [num_spheres, 12], where columns 6:9 represent angular velocity (wx, wy, wz)
             pred_w = pred_traj[-1][0, 6:9].cpu().numpy()
@@ -354,8 +319,6 @@ def main():
         save_dir = os.path.join(RESULTS_DIR, 'benchmark_oblique_summary')
         print(f"\nGenerating Oblique Impact Summary Plot at {save_dir}")
         plot_angular_velocity_components(pred_arr, gt_arr, save_dir)
-
-        dump_oblique_wall_summary(RESULTS_DIR, pred_arr, gt_arr)
         print("Done!")
 
 if __name__ == "__main__":

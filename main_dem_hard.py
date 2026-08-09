@@ -14,7 +14,6 @@ Modes:
 
 import os
 import shutil
-import time
 import torch
 import numpy as np
 import random
@@ -34,7 +33,6 @@ from case_05_dem_hard.rollout_evaluator import evaluate_rollout
 # Neural Network modules and utilities
 from model.model_dem import DynamicsSolver
 from utils.trainer_dem import Trainer, train_one_epoch
-from utils.metrics_dump import dump_rollout_metrics
 
 
 def set_seed(seed=100):
@@ -132,10 +130,11 @@ def main():
         print(f"Training for {epochs} epochs with Gravity Network Enabled...")
         for epoch in range(epochs):
             train_loss = train_one_epoch(trainer, train_loader, pbar_desc=f"Epoch {epoch+1}/{epochs}", accumulation_steps=accumulation_steps)
-            print(f"Epoch {epoch+1}/{epochs} | Train Loss (MSE): {train_loss:.6e}")
-
+            
             # Periodically evaluate the model's rollout stability on the validation set
             if (epoch + 1) % eval_frequency == 0 or epoch == 0:
+                print(f"\nEpoch {epoch+1} Train Loss (MSE): {train_loss:.4e}")
+                
                 # Standard 1:1 timestep syncing is used for cuboid evaluations
                 val_pos_err, val_vel_err, val_angvel_err, _, _ = evaluate_rollout(
                     test_loader=val_loader,
@@ -171,23 +170,19 @@ def main():
     # MODE: TEST (Gravity Cuboid Extrapolation)
     # ==========================================================
     elif args.mode == 'test':
-        case_name = "case_06"
-
+        case_name = "case_06" 
+        
         expt_dataset = DemDataset(DATASET_DIR, case_name=case_name)
         expt_loader = DataLoader(expt_dataset, batch_size=1, shuffle=False)
         
         # Restore the best weights from training
         best_model_path = os.path.join(trainer.model_dir, "model_checkpoint_best_val.pth")
-        checkpoint_loaded = os.path.exists(best_model_path)
-        if checkpoint_loaded:
+        if os.path.exists(best_model_path):
             model.load_state_dict(torch.load(best_model_path, map_location=device))
             print(f"Loaded best validation model from {best_model_path}")
-        else:
-            print(f"Warning: Checkpoint not found at {best_model_path}. Evaluating with uninitialized weights.")
-
+        
         print(f"\nStarting Gravity Cuboid Rollout ({case_name})...")
-
-        _t0 = time.perf_counter()
+        
         pos_err, vel_err, angvel_err, predicted_traj_sys, grndtruth_traj_sys = evaluate_rollout(
             test_loader=expt_loader,
             model=model,
@@ -206,15 +201,7 @@ def main():
             plot_region=(GEO_DATA_CUBOID[0][0], GEO_DATA_CUBOID[1][0]),
             bottom_wall=False
         )
-        _elapsed = time.perf_counter() - _t0
-
-        dump_rollout_metrics(
-            RESULTS_DIR, f'{case_name}_gravity_rollout', pos_err, vel_err, angvel_err, _elapsed,
-            extra={"case": "case_05_dem_hard", "mode": "test", "evaluated_case": case_name,
-                   "device": str(device), "checkpoint_loaded": checkpoint_loaded,
-                   "checkpoint_path": best_model_path}
-        )
-
+        
         # Post-process visualization artifacts
         if args.plot:
             from case_05_dem_hard.visualization import create_gif, plot_physics_panel
@@ -243,13 +230,10 @@ def main():
         cyl_loader = DataLoader(cyl_dataset, batch_size=1, shuffle=False)
         
         best_model_path = os.path.join(trainer.model_dir, "model_checkpoint_best_val.pth")
-        checkpoint_loaded = os.path.exists(best_model_path)
-        if checkpoint_loaded:
+        if os.path.exists(best_model_path):
             model.load_state_dict(torch.load(best_model_path, map_location=device))
             print(f"Loaded best validation model from {best_model_path}")
-        else:
-            print(f"Warning: Checkpoint not found at {best_model_path}. Evaluating with uninitialized weights.")
-
+        
         # Swap the interaction model to handle cylindrical boundaries
         cyl_bounds = insert_boundary(GEO_DATA_CYLINDER, boundary='cylinder', device=device)
         cyl_interaction = CylinderInteraction(cyl_bounds, threshold=THRESHOLD, device=device)   
@@ -262,7 +246,6 @@ def main():
         print(f"Syncing every {microsteps} micro-steps (Loader: {SAMPLE_TIME_STEP_CYLINDER}s | Model: {SAMPLE_TIME_STEP_CUBOID}s)")
 
         # Execute evaluating rollout, which natively supports dynamic rotating boundaries
-        _t0 = time.perf_counter()
         pos_err, vel_err, angvel_err, predicted_traj_sys, grndtruth_traj_sys = evaluate_rollout(
             test_loader=cyl_loader,
             model=model,
@@ -278,16 +261,6 @@ def main():
             frequency=25, 
             experiment_name=f'{case_name}_rollout',
             save_folder=RESULTS_DIR
-        )
-        _elapsed = time.perf_counter() - _t0
-
-        dump_rollout_metrics(
-            RESULTS_DIR, f'{case_name}_rollout', pos_err, vel_err, angvel_err, _elapsed,
-            extra={"case": "case_05_dem_hard", "mode": "cylinder", "evaluated_case": case_name,
-                   "device": str(device), "checkpoint_loaded": checkpoint_loaded,
-                   "checkpoint_path": best_model_path,
-                   "microsteps_per_sync": microsteps,
-                   "dt_model": SAMPLE_TIME_STEP_CUBOID, "dt_loader": SAMPLE_TIME_STEP_CYLINDER}
         )
 
         if args.plot:

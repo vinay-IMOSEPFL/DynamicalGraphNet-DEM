@@ -210,12 +210,8 @@ Adds gravity and a rotating cylindrical boundary. Hyperparameters in
 `case_05_dem_hard/config.py`: Adam, learning rate 1×10⁻³, batch 64, 200 epochs, latent width
 128, 5 message-passing rounds.
 
-Gravity enters through a head that decodes a single signed magnitude along the y axis, which
-is fixed in the model rather than learned. The direction was measured from the reference data:
-spheres with no contacts in a frame accelerate at (0, −9.83, 0) m/s², with the x and z
-components exactly zero. Constraining the direction and decoding an acceleration rather than a
-per-sub-step velocity change leaves one scalar to learn, and the trained model recovers
-**−9.67 m/s²**, within 1.6% of the measured field.
+Gravity is one learned scalar: an acceleration along the y axis, applied to every sphere on
+each sub-step. The direction is fixed in the model, so only the magnitude is learned.
 
 ```bash
 python main_dem_hard.py --mode train

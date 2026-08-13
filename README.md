@@ -31,6 +31,7 @@ molecular dynamics and N-body experiments live in the main repository.
 - [Installation](#installation)
 - [Step 1: Download the data](#step-1-download-the-data)
 - [Step 2: Build the graphs](#step-2-build-the-graphs)
+- [Boundary model](#boundary-model)
 - [Step 3: Case 04, homogeneous spheres](#step-3-case-04-homogeneous-spheres)
 - [Step 4: Case 05, gravity and a rotating drum](#step-4-case-05-gravity-and-a-rotating-drum)
 - [Results](#results)
@@ -170,6 +171,32 @@ Budget about 3 GB for the two `dataset/` directories.
 > **Rebuild the graphs whenever `boundary_model.py` changes.** The graphs on disk encode the
 > boundary construction, and training reads them while evaluation rebuilds graphs live. A
 > stale `dataset/` therefore trains on one thing and scores on another, with no error raised.
+
+---
+
+## Boundary model
+
+Walls are represented by ghost nodes rather than by a force law. Each sphere is reflected
+across every wall to create one ghost per surface, and a wall contact is an ordinary
+sphere-sphere contact with that ghost.
+
+- **Placement.** A ghost sits at a distance |d| beyond its wall, where d is the signed
+  distance from the sphere centre to the plane. The sphere-to-ghost separation is therefore
+  2|d|, and an edge forms when that falls under the interaction threshold. Using |d| rather
+  than the signed distance keeps the ghost on the far side even if a sphere crosses the plane,
+  so the contact always pushes back into the domain.
+- **Pairing.** Each ghost bonds only with the sphere it mirrors. Ghost-to-ghost and
+  sphere-to-another-sphere's-ghost edges cannot arise.
+- **Kinematics.** Ghosts of a stationary wall carry zero velocity, so the relative velocity at
+  the contact is the sphere's own. That preserves the tangential component, which is what
+  generates spin on an oblique impact. Ghosts are not integrated; they are rebuilt by
+  reflection at every step.
+- **Cylinder.** The drum has three surfaces, the curved wall and two end caps, so each sphere
+  carries three ghosts. When the drum rotates, `rotating_walls()` gives each ghost the local
+  surface velocity of the wall it represents.
+
+`case_04_dem_simple/boundary_model.py` implements the cuboid; `case_05_dem_hard/boundary_model.py`
+adds the cylinder.
 
 ---
 

@@ -93,7 +93,7 @@ def main():
     # 2. Model & Physics Initialization
     # ==========================================================
     # Initialize the core Graph Neural Network.
-    # Passing ext_force=True enables the external gravity MLP within the network.
+    # ext_force=True enables the gravity head: a signed magnitude along the y axis.
     model = DynamicsSolver(
         sample_step=SAMPLE_TIME_STEP_CUBOID,
         train_stats=train_stats,

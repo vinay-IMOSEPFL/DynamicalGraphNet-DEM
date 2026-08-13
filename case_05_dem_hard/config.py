@@ -31,13 +31,14 @@ SAMPLE_TIME_STEP_CUBOID = 1e-4
 GEO_DATA_CYLINDER = ((-0.05, -0.048, 0.0), (0.05, 0.052, 0.1))
 SAMPLE_TIME_STEP_CYLINDER = 1e-3  # Ground truth save interval for the cylinder case
 
+
 # ---------------------------------------------------------------------------
 # Model and training hyperparameters
 # ---------------------------------------------------------------------------
 MODEL_SETTINGS = {
     "batch_size": 64,
-    "epochs": 250,
-    "lr": 3e-4,
+    "epochs": 200,
+    "lr": 1e-3,
     "nf": 128,
     "n_layers": 2,
     "num_msgs": 5,

@@ -274,8 +274,12 @@ class DynamicsSolver(nn.Module):
         self.interaction_proc_layer = InteractionBlock(latent_size, mlp_layers)
 
         if ext_force:
-            # Deliberately not rotation-equivariant: it stands for a fixed field like gravity.
-            self.ext_dv_decoder = build_mlp_d(latent_size, latent_size, 3,
+            # The external field acts along the y axis; only its signed magnitude is learned,
+            # so it cannot pick up the x and z components the data does not have. Deliberately
+            # not rotation-equivariant: it stands for a fixed field like gravity.
+            axis = torch.as_tensor((0, 1, 0), dtype=torch.float32)
+            self.register_buffer("ext_axis", axis / axis.norm())
+            self.ext_dv_decoder = build_mlp_d(latent_size, latent_size, 1,
                                               num_layers=mlp_layers, lay_norm=False)
 
         self.num_messages = num_msgs
@@ -296,15 +300,17 @@ class DynamicsSolver(nn.Module):
 
         # Ghosts are held fixed within the step; only spheres integrate. They are images, not
         # bodies, so integrating them would let the impulse push them around as free particles.
-        # The rollout rebuilds them from their parents at the next step.
+        # The rollout rebuilds them by reflection again at the next step.
         is_sphere = (node_type == 0).squeeze(-1).unsqueeze(-1)
 
         node_latent = self.node_encoder(node_type)
 
         # Decoded once, reapplied each sub-step, so its contribution scales with num_msgs.
-        ext_dv = torch.zeros_like(node_v_t)
+        # Only a magnitude is decoded; the direction is the fixed axis.
+        ext_acc = torch.zeros_like(node_v_t)
         if hasattr(self, 'ext_dv_decoder'):
-            ext_dv = torch.where(is_sphere, self.ext_dv_decoder(node_latent), ext_dv)
+            ext_acc = torch.where(is_sphere,
+                                 self.ext_dv_decoder(node_latent) * self.ext_axis, ext_acc)
 
         sum_node_dv = torch.zeros_like(node_v_t)
         sum_node_dw = torch.zeros_like(node_v_t)
@@ -343,7 +349,7 @@ class DynamicsSolver(nn.Module):
                 node_dw = torch.zeros_like(node_w_t)
 
             zero = torch.zeros_like(node_dv)
-            node_dv = torch.where(is_sphere, node_dv + ext_dv, zero)
+            node_dv = torch.where(is_sphere, node_dv + ext_acc*self.sub_tstep, zero)
             node_dw = torch.where(is_sphere, node_dw, zero)
 
             node_v_next = node_v_t + node_dv

@@ -137,7 +137,7 @@ case_04_dem_simple/data/homogeneous/
     └── oblique_sphere_collisions/  two spheres in free space
 
 case_05_dem_hard/data/heterogeneous/gravity/
-├── training/          case_01 … case_05    mixed densities, under gravity
+├── training/          case_01 … case_05    60 spheres under gravity
 ├── validation/        case_06
 ├── extrapolation/     case_07
 └── rotating_cylinder/ 2,073 spheres in a rotating drum
@@ -206,8 +206,16 @@ position, velocity and angular-velocity errors.
 
 ## Step 4: Case 05, gravity and a rotating drum
 
-Adds gravity through an external-force head and a rotating cylindrical boundary. Same
-hyperparameters, plus `use_ext_force: True`.
+Adds gravity and a rotating cylindrical boundary. Hyperparameters in
+`case_05_dem_hard/config.py`: Adam, learning rate 1×10⁻³, batch 64, 200 epochs, latent width
+128, 5 message-passing rounds.
+
+Gravity enters through a head that decodes a single signed magnitude along the y axis, which
+is fixed in the model rather than learned. The direction was measured from the reference data:
+spheres with no contacts in a frame accelerate at (0, −9.83, 0) m/s², with the x and z
+components exactly zero. Constraining the direction and decoding an acceleration rather than a
+per-sub-step velocity change leaves one scalar to learn, and the trained model recovers
+**−9.67 m/s²**, within 1.6% of the measured field.
 
 ```bash
 python main_dem_hard.py --mode train
@@ -271,13 +279,14 @@ x and z should stay at zero.
 
 ### Case 05: gravity, and zero-shot transfer to the drum
 
-| Rollout | Position MAE | Velocity MAE | Absolute position error |
-| --- | --- | --- | --- |
-| Cuboid under gravity, 1498 steps | 0.673 | 0.103 | 4.2 mm |
-| Rotating drum, 1998 steps | 2.576 | 0.039 | 16.1 mm |
+| Rollout | Position MAE | Velocity MAE | Angular velocity MAE | Absolute position error |
+| --- | --- | --- | --- | --- |
+| Cuboid under gravity, 1498 steps | 0.630 | 0.084 | 0.082 | 3.9 mm |
+| Rotating drum, 1998 steps | 0.932 | 0.019 | 0.039 | 5.8 mm |
 
 The drum is a zero-shot transfer: a curved rotating boundary and 35× more spheres than
-anything in training. Error stays bounded across 20,000 forward passes rather than growing.
+anything in training. Error stays bounded across 20,000 forward passes rather than growing,
+and the bed stays axially centred to within about 2.5 mm of the reference.
 
 <p align="center">
   <img src="docs/assets/case05_gravity_rollout.gif" width="48%" alt="Case 05 gravity rollout">

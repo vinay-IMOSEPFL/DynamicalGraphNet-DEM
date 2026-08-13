@@ -1564,3 +1564,70 @@ Best validation across the three case_05 attempts, all 250 epochs:
 The two runs on the stale dataset agree with each other to 0.3% and both sit 18% worse than
 the rebuilt run, which is what a systematic data problem looks like rather than run-to-run
 variance.
+
+## 34. Final case_05 model: the external field
+
+The external-force head was the dominant defect in case_05, and it took three corrections.
+
+**What was wrong.** The head decoded a free 3-vector from the static node latent, added once
+per sub-step. Every checkpoint learned a badly wrong field:
+
+| checkpoint | learned acceleration (m/s^2) | error |
+|---|---|---|
+| legacy 6 Aug | [-3.544, -8.163, -1.574] | 4.221 |
+| 20, legacy architecture | [-4.341, -5.963, -2.065] | 6.169 |
+| 17_ghost_zeros | [-2.294, -11.445, +5.301] | 5.998 |
+| measured from the data | [ 0.000, -9.829, 0.000] | -- |
+
+The measurement is direct: spheres with no contacts in a frame accelerate under gravity alone,
+giving (0, -9.829, 0) in training and (0, -9.796, 0) in validation across 1006 samples, with
+the x and z components exactly zero and per-axis standard deviation 0.000.
+
+An unconstrained 3-vector let the head absorb systematic error the contact model should have
+explained. In the cuboid this is nearly invisible, since a spurious lateral push just presses
+material into a nearby wall. In the drum, whose axis is 100 mm and unobstructed, the same
+error integrated into a bed that marched 16 mm toward one end plate.
+
+**The three corrections.**
+
+1. Fix the direction. The axis is hard-coded to y in the model, so the x and z components are
+   structurally zero rather than merely small.
+2. Decode an acceleration, not a per-sub-step velocity change, and multiply by `sub_tstep`
+   when applying it. The learned number is now a true m/s^2, independent of `num_msgs` and the
+   timestep. With only the direction fixed and the old parameterisation, run 18 learned
+   -23.47 m/s^2, worse in magnitude than the free-vector models.
+3. Raise the learning rate. At 3e-5 training stalled by epoch 10 in two separate runs; at
+   3e-4 it reached 2.7770e-01; at 1e-3 it reached 2.2577e-01 with 10 improvements.
+
+**Result (24_extacc_200ep_lr1e3, 200 epochs, lr 1e-3).** The model recovers gravity on its own:
+
+    learned  = [-0.0000, -9.6707, -0.0000] m/s^2
+    measured = [ 0.0000, -9.8290,  0.0000] m/s^2
+    error    = 0.158 m/s^2, 98.4% of gravity
+
+Confirmed independently by integrating an isolated sphere: free fall is -9.6707 m/s^2. The
+error falls from 4.2-13.6 m/s^2 to 0.158, a factor of 27 against the best previous checkpoint.
+
+The value tracks whichever checkpoint validation selects, and is not monotone: intermediate
+best checkpoints in this run read -10.78, -9.22 and -9.80 before the final -9.67. The figure
+quoted here is the one in the shipped weights.
+
+| metric | 24 final | 17_ghost_zeros |
+|---|---|---|
+| best validation | **2.2577e-01** | 3.3324e-01 |
+| case_06 scaled pos MAE | **0.6298** (3.94 mm) | 0.9642 (6.03 mm) |
+| drum scaled pos MAE | **0.9316** (5.82 mm) | 2.5755 (16.10 mm) |
+| drum velocity / angular velocity | **0.0188 / 0.0390** | 0.0392 / 0.0902 |
+| drum axial drift | within 2.5 mm | +16 mm, systematic |
+
+### 34.1 What this run does not establish
+
+The learning rate and the head parameterisation changed together between runs 18 and 24, so
+their separate contributions are not isolated here. The physical argument for decoding an
+acceleration stands on its own -- it removes a dependence on `num_msgs` and the timestep -- but
+the validation gain cannot be attributed to it from this evidence.
+
+`lambdaij_scaler` remains removed and softplus remains on the decoded inverse mass and inertia.
+Earlier bisect arms suggested restoring the scaler helped, but run 24 reaches 2.2577e-01
+against 2.2703e-01 for the legacy architecture at the same learning rate, so that gap closes
+without it. The exact angular-momentum conservation is kept.

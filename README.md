@@ -181,10 +181,39 @@ across every wall to create one ghost per surface, and a wall contact is an ordi
 sphere-sphere contact with that ghost.
 
 - **Placement.** A ghost sits at a distance |d| beyond its wall, where d is the signed
-  distance from the sphere centre to the plane. The sphere-to-ghost separation is therefore
-  2|d|, and an edge forms when that falls under the interaction threshold. Using |d| rather
-  than the signed distance keeps the ghost on the far side even if a sphere crosses the plane,
-  so the contact always pushes back into the domain.
+  distance from the sphere centre to the plane, measured along the outward normal n. The
+  sphere-to-ghost separation is 2|d|, so a contact registers when that falls under the
+  interaction threshold, exactly as it would between two real spheres.
+
+```
+              inside    |    outside              d     = (p - p_wall) . n     (negative inside)
+                        |                         ghost = p + 2|d| n
+                        |         n --->
+           (p)          |          (ghost)        contact when 2|d| < threshold
+            O-----------|-----------O
+            '--- |d| ---'--- |d| ---'
+            '-------- 2|d| ---------'
+                        |
+                   wall plane
+```
+
+  The absolute value is what keeps the ghost on the far side. If a sphere ever crosses the
+  plane, the signed form `p - 2d n` puts its ghost *inside* the domain, and the contact then
+  drives the sphere further out instead of back in.
+
+```
+   sphere has crossed the plane
+   ---------------------------------------------------------------------------
+
+     signed form   p - 2d n                 absolute form   p + 2|d| n
+
+        (ghost)    |    (p)                              |   (p)      (ghost)
+          O--------|-----O                     ----------|----O----------O
+                   |     |                               |    |
+                   |     '--> pushed OUT                 |    '<-- pushed back IN
+              wall plane                            wall plane
+```
+
 - **Pairing.** Each ghost bonds only with the sphere it mirrors. Ghost-to-ghost and
   sphere-to-another-sphere's-ghost edges cannot arise.
 - **Kinematics.** Ghosts of a stationary wall carry zero velocity, so the relative velocity at

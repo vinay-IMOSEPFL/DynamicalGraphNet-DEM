@@ -1,9 +1,9 @@
 """
 Data Preprocessing Pipeline for Heterogeneous DEM Datasets (Gravity & Cylinder).
 
-This script processes raw Discrete Element Method (DEM) simulation data (CSVs) 
-into PyTorch Geometric graph structures. It extracts kinematic properties, 
-applies appropriate physical boundaries (cuboidal or cylindrical), and saves 
+This script processes raw Discrete Element Method (DEM) simulation data (CSVs)
+into PyTorch Geometric graph structures. It extracts kinematic properties,
+applies appropriate physical boundaries (cuboidal or cylindrical), and saves
 the processed sequences as serialized tensor files (.pt) for efficient training.
 """
 
@@ -23,8 +23,8 @@ from case_05_dem_hard.boundary_model import SphereWallInteraction, CylinderInter
 def read_time_step(data_path, time_step):
     """
     Reads raw DEM simulation data from a CSV file for a specific time step.
-    
-    Extracts the kinematic properties (position, velocity, angular velocity) 
+
+    Extracts the kinematic properties (position, velocity, angular velocity)
     and handles material mapping based on particle density.
 
     Args:
@@ -32,32 +32,32 @@ def read_time_step(data_path, time_step):
         time_step (int): The specific integer time step to read.
 
     Returns:
-        tuple: PyTorch tensors for position, angular position, velocity, 
-               angular velocity, and sphere type (material label). 
+        tuple: PyTorch tensors for position, angular position, velocity,
+               angular velocity, and sphere type (material label).
                All spatial/kinematic tensors have shape (N, 3).
     """
     filename = f'data_at_timestep_{time_step:03d}.csv'
     filepath = os.path.join(data_path, filename)
     df = pd.read_csv(filepath)
-    
+
     # Extract 3D coordinates
-    pos = torch.hstack((torch.tensor(df['coordinates:0'].astype(float)).reshape(-1, 1), 
-                        torch.tensor(df['coordinates:1'].astype(float)).reshape(-1, 1), 
+    pos = torch.hstack((torch.tensor(df['coordinates:0'].astype(float)).reshape(-1, 1),
+                        torch.tensor(df['coordinates:1'].astype(float)).reshape(-1, 1),
                         torch.tensor(df['coordinates:2'].astype(float)).reshape(-1, 1)))
-    
+
     # Initialize angular position to zero (typically not exported by raw DEM output)
     ang_pos = torch.zeros_like(pos)
-    
+
     # Extract 3D translational velocities
-    vel = torch.hstack((torch.tensor(df['Velocity:0'].astype(float)).reshape(-1, 1), 
-                        torch.tensor(df['Velocity:1'].astype(float)).reshape(-1, 1), 
+    vel = torch.hstack((torch.tensor(df['Velocity:0'].astype(float)).reshape(-1, 1),
+                        torch.tensor(df['Velocity:1'].astype(float)).reshape(-1, 1),
                         torch.tensor(df['Velocity:2'].astype(float)).reshape(-1, 1)))
-    
+
     # Extract 3D angular velocities
-    ang_vel = torch.hstack((torch.tensor(df['Angular_velocity:0'].astype(float)).reshape(-1, 1), 
-                            torch.tensor(df['Angular_velocity:1'].astype(float)).reshape(-1, 1), 
+    ang_vel = torch.hstack((torch.tensor(df['Angular_velocity:0'].astype(float)).reshape(-1, 1),
+                            torch.tensor(df['Angular_velocity:1'].astype(float)).reshape(-1, 1),
                             torch.tensor(df['Angular_velocity:2'].astype(float)).reshape(-1, 1)))
-    
+
     # Map physical particle density to a categorical node type/material label
     if 'Density' in df.columns:
         unique_densities = df['Density'].astype(float).unique()
@@ -72,9 +72,9 @@ def read_time_step(data_path, time_step):
 
 def extract_number(fn):
     """Parses the integer time step from a standard DEM filename (e.g., 'data_at_timestep_015.csv')."""
-    try: 
+    try:
         return int(fn.split('.')[0].split('_')[-1])
-    except: 
+    except:
         return None
 
 def get_time_steps(data_path):
@@ -85,7 +85,7 @@ def get_time_steps(data_path):
 
 def process_directory_tree(raw_root, save_root, interaction):
     """
-    Recursively crawls a raw data directory, builds PyTorch Geometric graphs 
+    Recursively crawls a raw data directory, builds PyTorch Geometric graphs
     representing the physical states using a sliding window, and saves them to disk.
 
     Args:
@@ -93,26 +93,26 @@ def process_directory_tree(raw_root, save_root, interaction):
         save_root (str): The root directory where processed .pt files will be saved.
         interaction (object): The boundary interaction model used to construct the graph topology.
     """
-    if not os.path.exists(raw_root): 
+    if not os.path.exists(raw_root):
         print(f"  [Skipped] Source not found: {raw_root}")
         return
-    
+
     for dirpath, dirnames, filenames in os.walk(raw_root):
         # Only process directories containing simulation frames
         if any(f.endswith('.csv') for f in filenames):
             rel_path = os.path.relpath(dirpath, raw_root)
             save_dir = os.path.normpath(os.path.join(save_root, rel_path))
             os.makedirs(save_dir, exist_ok=True)
-            
+
             time_steps = get_time_steps(dirpath)
             if len(time_steps) < 3:
                 print(f"Not enough timesteps in {dirpath}. Skipping.")
                 continue
-                
+
             # Exclude the first and last frames to allow for a (t-1, t, t+1) sliding window
             time_steps = time_steps[1:-1]
             all_graphs = []
-            
+
             for t in tqdm(time_steps, desc=os.path.basename(dirpath), unit="step"):
                 # Extract state at t (current), t-1 (history), and t+1 (target label)
                 pos, _, vel_t, ang_vel_t, _ = read_time_step(dirpath, t)
@@ -135,12 +135,12 @@ if __name__ == "__main__":
     print("==================================================")
     print(" PREPROCESSING HETEROGENEOUS GRAVITY DATASETS")
     print("==================================================")
-    
+
     # =========================================================
     # 1. CUBOID CASES (Train, Val, Test)
     # =========================================================
     print("\n--- 1. Gravity Cuboid Datasets ---")
-    
+
     # Initialize the boundary interaction model for the standard cuboidal enclosure
     cuboid_bounds = insert_boundary(GEO_DATA_CUBOID, boundary='cuboid', device='cpu')
     cuboid_interaction = SphereWallInteraction(cuboid_bounds, THRESHOLD, device='cpu')
@@ -155,7 +155,7 @@ if __name__ == "__main__":
     # 2. CYLINDER EXTRAPOLATION
     # =========================================================
     print("\n--- 2. Rotating Cylinder Extrapolation ---")
-    
+
     # Switch boundary models to handle the curved, rotating cylinder geometry
     cyl_bounds = insert_boundary(GEO_DATA_CYLINDER, boundary='cylinder', device='cpu')
     cyl_interaction = CylinderInteraction(cyl_bounds, threshold=THRESHOLD, device='cpu')

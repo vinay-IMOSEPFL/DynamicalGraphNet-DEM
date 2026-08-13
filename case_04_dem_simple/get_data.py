@@ -5,7 +5,7 @@ download_data.py
 Downloads, extracts, and organises DEM simulation data from:
     https://zenodo.org/records/19691595
 
-This script will create a `data/` folder in its current location 
+This script will create a `data/` folder in its current location
 and download all contents into it.
 
 Usage
@@ -68,8 +68,6 @@ data/
 #         └── rotating_cylinder/
 #             └── data_at_timestep_000.csv … (2000 files)
 """
-
-import argparse
 import shutil
 import sys
 import tempfile
@@ -340,7 +338,7 @@ def section(title: str) -> None:
 def main() -> None:
     print(f"Root path: {SCRIPT_DIR}")
     print(f"Creating Data directory at: {DATA_DIR}")
-    
+
     kz = False # Keep Zip is false
 
     print("\n=== Downloading & organising ALL datasets ===")

@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Generated artifacts — never commit these.
+# Generated artifacts: never commit these.
 #
 # Everything below is reproducible from the Zenodo record plus the scripts in
 # this repository, and together it runs to several GB. Regenerate with:
@@ -60,3 +60,30 @@ ENV/
 .vscode/
 .idea/
 *.swp
+
+# ---------------------------------------------------------------------------
+# Experiment run folders
+# ---------------------------------------------------------------------------
+# Each numbered directory holds the checkpoint, logs, figures and snapshots of one
+# experiment from the reproduction log in decisions.md. They are the working record,
+# not part of the release, and total several GB.
+1_ref_frame/
+2_wall_d/
+3_epochs400_OLD_ARCH/
+4_conserving/
+5_reflect/
+6_no_softplus/
+7_mirror_ghost/
+8_origmodel_mirrorghost/
+9_cleaned_model/
+10_lr3e5_ABANDONED/
+11_paper_200ep/
+12_500ep/
+13_onesided_ghost/
+14_onesided_retrain/
+15_ghost_integration/
+16_final_250ep/
+17_ghost_zeros/
+# Any future ones follow the same naming.
+[0-9]_*/
+[0-9][0-9]_*/

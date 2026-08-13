@@ -7,11 +7,11 @@ from torch_geometric.loader import DataLoader
 class DemDataset(Dataset):
     """
     PyTorch Dataset for loading preprocessed Discrete Element Method (DEM) graphs.
-    
+
     This dataset supports two loading modes:
-    1. Case-specific loading: Deep searches the root directory for a specific case 
+    1. Case-specific loading: Deep searches the root directory for a specific case
        (e.g., 'case_07') and loads its graph sequence.
-    2. Split-based loading: Loads all cases contained within a specified split 
+    2. Split-based loading: Loads all cases contained within a specified split
        directory (e.g., 'train', 'val', 'test').
     """
     def __init__(self, root: str, split: str = "train", case_name: str = None):
@@ -22,7 +22,7 @@ class DemDataset(Dataset):
             root (str): The base directory containing the dataset.
             split (str): The sub-directory split to load (e.g., 'heterogeneous/gravity/training').
                          Ignored if case_name is provided.
-            case_name (str, optional): A specific case folder to locate and load. 
+            case_name (str, optional): A specific case folder to locate and load.
                                        If provided, the class searches the entire root tree.
         """
         self.root = root
@@ -31,7 +31,7 @@ class DemDataset(Dataset):
         if case_name is not None:
             # Mode 1: Deep search for a specific case across all nested folders
             found_path = None
-            
+
             # Walk the directory tree to locate the target case folder
             for dirpath, dirnames, filenames in os.walk(root):
                 potential_path = os.path.join(dirpath, case_name, "graph_list.pt")
@@ -39,18 +39,18 @@ class DemDataset(Dataset):
                     found_path = potential_path
                     self.split_dir = os.path.join(dirpath, case_name)
                     break
-            
+
             if found_path is None:
                 raise ValueError(f"Case '{case_name}' with a 'graph_list.pt' was not found anywhere under {root}.")
-            
+
             # weights_only=False is required from PyTorch 2.6 onwards: these files
             # hold pickled PyTorch Geometric `Data` objects, not plain state dicts.
             graphs = torch.load(found_path, weights_only=False)
             if not isinstance(graphs, (list, tuple)):
                 raise ValueError(f"`graph_list.pt` in {case_name} must be a list of Data, got {type(graphs)}")
-            
+
             self.graph_list.extend(graphs)
-            
+
         else:
             # Mode 2: Load all cases within a specific split directory
             self.split_dir = os.path.join(root, split)
@@ -62,7 +62,7 @@ class DemDataset(Dataset):
                 d for d in os.listdir(self.split_dir)
                 if os.path.isdir(os.path.join(self.split_dir, d))
             )
-            
+
             if not cases:
                 raise ValueError(f"No case subfolders found under {self.split_dir}")
 
@@ -72,11 +72,11 @@ class DemDataset(Dataset):
                 if not os.path.isfile(path):
                     print(f"Warning: Skipping '{case}' as no 'graph_list.pt' was found.")
                     continue
-                
+
                 graphs = torch.load(path, weights_only=False)
                 if not isinstance(graphs, (list, tuple)):
                     raise ValueError(f"`graph_list.pt` in {case} must be a list of Data, got {type(graphs)}")
-                
+
                 self.graph_list.extend(graphs)
 
         if len(self.graph_list) == 0:
@@ -93,22 +93,22 @@ class DemDataset(Dataset):
     def get_stats(self, device=None):
         """
         Computes global dataset statistics required for feature normalization.
-        
-        This batches the entire dataset into a single PyTorch Geometric graph 
-        to efficiently compute the minimum, maximum, mean, and standard deviation 
+
+        This batches the entire dataset into a single PyTorch Geometric graph
+        to efficiently compute the minimum, maximum, mean, and standard deviation
         of the input features and target labels.
 
         Args:
             device (torch.device, optional): The device on which to perform the computations.
 
         Returns:
-            dict: A dictionary containing the computed statistics for node velocities, 
+            dict: A dictionary containing the computed statistics for node velocities,
                   angular velocities, edge attributes, and target displacements/changes.
         """
         # Batch the entire dataset into memory to vectorize the reduction operations
         loader = DataLoader(self, batch_size=len(self), shuffle=False)
-        stat_graph = next(iter(loader)) 
-        
+        stat_graph = next(iter(loader))
+
         if device is not None:
             stat_graph = stat_graph.to(device)
 
@@ -130,14 +130,14 @@ class DemDataset(Dataset):
             "node_angvel_max": all_angvel.max(),
             "edge_feat_min": all_edge_feat.min(),
             "edge_feat_max": all_edge_feat.max(),
-            
+
             # Ground truth targets use standardization (mean and std)
             "dv_mean": all_dv.mean(dim=0),
             "dv_std": all_dv.std(dim=0),
             "dw_mean": all_dw.mean(dim=0),
-            "dw_std": all_dw.std(dim=0),    
+            "dw_std": all_dw.std(dim=0),
             "dx_mean": all_dx.mean(dim=0),
-            "dx_std": all_dx.std(dim=0),             
+            "dx_std": all_dx.std(dim=0),
         }
-        
+
         return stats

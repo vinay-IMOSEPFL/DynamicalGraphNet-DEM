@@ -4,11 +4,11 @@ from torch_geometric.data import Data
 
 class SphereWallInteraction:
     """
-    Constructs a PyTorch Geometric (PyG) graph representing spheres and their interactions 
-    with each other and with flat boundaries (walls). 
-    
-    Boundary conditions are enforced using the "Ghost Node" method: real spheres are 
-    reflected across the wall planes to create virtual "ghost" spheres. Collisions with 
+    Constructs a PyTorch Geometric (PyG) graph representing spheres and their interactions
+    with each other and with flat boundaries (walls).
+
+    Boundary conditions are enforced using the "Ghost Node" method: real spheres are
+    reflected across the wall planes to create virtual "ghost" spheres. Collisions with
     walls are mathematically treated as collisions with these ghost spheres.
     """
     def __init__(self, boundaries, threshold, device='cpu', dtype=torch.float32):
@@ -16,7 +16,7 @@ class SphereWallInteraction:
         Initializes the interaction model by parsing the boundary plane equations.
 
         Args:
-            boundaries (dict): A dictionary of plane equations, where each value is a 
+            boundaries (dict): A dictionary of plane equations, where each value is a
                                tensor [A, B, C, D] representing Ax + By + Cz + D = 0.
             threshold (float): Cutoff distance for establishing an edge (interaction).
             device (str): Computation device ('cpu' or 'cuda').
@@ -25,135 +25,138 @@ class SphereWallInteraction:
         self.device = device
         self.dtype = dtype
         self.threshold = threshold
-        
+
         normals, offsets = [], []
         # Extract the normal vector [A, B, C] and the scalar offset [D] for each wall
         for plane in boundaries.values():
             A, B, C, D = plane.tolist()
             normals.append([A, B, C])
             offsets.append(D)
-            
+
         self.normals = torch.tensor(normals, dtype=dtype, device=device)
         self.offsets = torch.tensor(offsets, dtype=dtype, device=device)
 
-    def insert_sphere_sphere_edges(self, sphere_positions, sphere_sphere_dist_matrix):
+    def _bidirectional(self, edges, attrs):
+        """Mirror an edge list so every pair appears in both directions."""
+        return (torch.cat([edges, edges.flip(0)], dim=1),
+                torch.cat([attrs, -attrs], dim=0))
+
+    def insert_sphere_sphere_edges(self, sphere_positions):
         """
-        Builds graph edges based on a pairwise distance matrix.
+        Edges between real spheres closer than the interaction threshold.
 
-        Args:
-            sphere_positions (torch.Tensor): Tensor of shape (N, 3) holding 3D coordinates.
-            sphere_sphere_dist_matrix (torch.Tensor): Tensor of shape (N, N) holding pairwise distances.
-
-        Returns:
-            tuple: (bidirectional_edges, bidirectional_edge_attrs)
-                   where edges is shape (2, E) and attrs is shape (E, 3) holding distance vectors.
+        Returns edge_index (2, E) and edge_attr (E, 3), the vector from source to target.
         """
-        device = sphere_sphere_dist_matrix.device
-        
-        # Find pairs within the interaction threshold.
-        # torch.triu(..., diagonal=1) ensures we only look at the upper triangle of the matrix 
-        # to avoid duplicating edges (i->j and j->i) and ignores self-loops (diagonal=0).
-        edge_indices = ((sphere_sphere_dist_matrix < self.threshold) & 
-                        (torch.triu(torch.ones_like(sphere_sphere_dist_matrix), diagonal=1) == 1))
-        
-        # Convert boolean mask to list of index pairs [2, num_edges]
-        edge_indices = edge_indices.nonzero(as_tuple=False).t()
+        D = torch.cdist(sphere_positions, sphere_positions)
 
-        # Handle edge case: No particles are close enough to interact
-        if edge_indices.numel() == 0:
-            return (torch.empty((0, 2), dtype=torch.long, device=device),
-                    torch.empty((0, 3), dtype=self.dtype, device=device))
+        # Upper triangle only: excludes self-loops and avoids emitting each pair twice.
+        pairs = (D < self.threshold) & (torch.triu(torch.ones_like(D), diagonal=1) == 1)
+        edges = pairs.nonzero(as_tuple=False).t()
 
-        # The edge attribute is the spatial distance vector pointing from node i to node j
-        edge_attributes = sphere_positions[edge_indices[1]] - sphere_positions[edge_indices[0]]
+        if edges.numel() == 0:
+            return (torch.empty((2, 0), dtype=torch.long, device=self.device),
+                    torch.empty((0, 3), dtype=self.dtype, device=self.device))
 
-        # Duplicate the edges to make the graph undirected (bidirectional)
-        # Concat (i->j) with (j->i)
-        bidirectional_edges = torch.cat([edge_indices, edge_indices[[1, 0], :]], dim=1)
-        # Concat vectors with their inverse directions
-        bidirectional_edge_attrs = torch.cat([edge_attributes, -edge_attributes], dim=0)
-        
-        return (bidirectional_edges, bidirectional_edge_attrs)
+        attrs = sphere_positions[edges[1]] - sphere_positions[edges[0]]
+        return self._bidirectional(edges, attrs)
+
+    def insert_sphere_wall_edges(self, sphere_positions, all_pos):
+        """
+        Edges between each sphere and its own reflections, when within the threshold.
+
+        A ghost stands for its parent's contact with one wall, so it connects to that sphere
+        and nothing else. Ghosts are stacked one block of N per wall, so the ghost at block
+        offset k mirrors sphere k % N.
+        """
+        N = sphere_positions.size(0)
+        n_walls = (all_pos.size(0) - N) // N
+
+        parent = torch.arange(N, device=self.device).repeat(n_walls)
+        ghost = torch.arange(N, N * (n_walls + 1), device=self.device)
+
+        # Vector from a sphere to its image; its length is twice the distance to the wall.
+        attrs = all_pos[ghost] - sphere_positions[parent]
+        within = attrs.norm(dim=1) < self.threshold
+
+        if not within.any():
+            return (torch.empty((2, 0), dtype=torch.long, device=self.device),
+                    torch.empty((0, 3), dtype=self.dtype, device=self.device))
+
+        edges = torch.stack([parent[within], ghost[within]], dim=0)
+        return self._bidirectional(edges, attrs[within])
 
     def reflect(self, pos):
         """
-        Geometrically reflects all real spheres across all 6 cuboid walls to create ghost spheres.
+        Places one ghost sphere per wall, beyond that wall, for every real sphere.
+
+        The ghost sits |d| past the plane, d being the signed distance from the sphere centre.
+        Inside the enclosure this is the mirror image, and the separation 2|d| reproduces a
+        symmetric two-body collision against an immovable wall.
+
+        Using |d| rather than the signed d keeps the ghost outside once a sphere crosses the
+        plane; with the signed form the ghost would swap to the interior and the contact would
+        push the sphere out of the domain instead of back into it. The two agree for d < 0.
 
         Args:
             pos (torch.Tensor): Real sphere positions of shape (N, 3).
 
         Returns:
-            tuple: (all_pos, all_node_type) 
-                   all_pos includes real + ghost positions.
+            tuple: (all_pos, all_node_type)
+                   all_pos stacks the N real positions with 6*N ghosts, one block of N per wall.
                    all_node_type is 0 for real, 1 for ghost.
         """
         N = pos.size(0)
         device = pos.device
-        
+
         # Expand positions to calculate reflections against all 6 walls simultaneously
         # p shape becomes (6, N, 3)
         p = pos.unsqueeze(0).expand(6, -1, -1).to(device)
         norm_n = self.normals.norm(dim=1, keepdim=True).to(device)
-        
+
         # Calculate signed distance 'd' from each point to each plane: d = (P dot N) + D
         d = (p * self.normals.unsqueeze(1)).sum(dim=2) + self.offsets.unsqueeze(1).to(device)
         n_unit = self.normals / norm_n
-        
-        # Reflection formula: P_refl = P - 2 * (d / |N|) * N_unit
+
+        # Ghost at P + 2*|d|*n_unit: always beyond the wall, so contact always repels inward.
+        # Normals point out of the enclosure, so this reduces to the mirror image when d < 0.
         coeff = (d / norm_n).unsqueeze(-1)
-        p_refl = (p - 2 * coeff * n_unit.unsqueeze(1)).reshape(-1, 3)
+        p_refl = (p + 2 * coeff.abs() * n_unit.unsqueeze(1)).reshape(-1, 3)
 
         # Concatenate real positions with the newly generated ghost positions
-        all_pos = torch.cat([pos, p_refl], dim=0) 
-        
+        all_pos = torch.cat([pos, p_refl], dim=0)
+
         # Create labels: 0 denotes a real sphere, 1 denotes a ghost (wall) sphere
         node_type = torch.zeros(N, 1).to(device)
         node_type_r = torch.ones_like(p_refl[:, 0:1])
-        all_node_type = torch.cat([node_type, node_type_r], dim=0) 
-        
-        return all_pos, all_node_type          
+        all_node_type = torch.cat([node_type, node_type_r], dim=0)
+
+        return all_pos, all_node_type
+
 
     def process(self, sphere_positions):
         """
-        Executes the full boundary processing pipeline: 
-        1. Generates ghosts. 
-        2. Computes all pairwise distances. 
-        3. Creates edges. 
-        4. Filters out irrelevant ghost-ghost edges.
+        Builds the topology in two passes: sphere-sphere edges among the real particles,
+        then sphere-wall edges linking each sphere to its own reflections. Ghost-ghost and
+        ghost-to-other-sphere edges cannot arise, so no filtering is needed.
 
-        Args:
-            sphere_positions (torch.Tensor): Original real positions.
-
-        Returns:
-            tuple: Filtered edge_index, edge_attr, all positions, and node type labels.
+        Returns edge_index, edge_attr, all positions, and node type labels.
         """
-        all_pos, all_node_type = self.reflect(sphere_positions.to(self.device, dtype=self.dtype))
-        
-        # Compute dense distance matrix for all nodes (Real + Ghosts)
-        D = torch.cdist(all_pos, all_pos)
-        edge_index, edge_attr = self.insert_sphere_sphere_edges(all_pos, D)
-    
-        # Safe fallback if completely sparse
-        if edge_index.numel() == 0:
-            edge_index = torch.empty((2, 0), dtype=torch.long, device=self.device)
-            edge_attr = torch.empty((0, edge_attr.shape[1] if edge_attr.ndim > 1 else 1), dtype=edge_attr.dtype, device=self.device)
-            return edge_index, edge_attr, all_pos, all_node_type
-    
-        # Ghosts are only used to exert forces on real spheres.
-        # We must delete any edge that connects a ghost to another ghost.
-        nt = all_node_type.squeeze(1)
-        src, dst = edge_index
-        keep = ~((nt[src] == 1) & (nt[dst] == 1)) # Keep if NOT (src is ghost AND dst is ghost)
-    
-        edge_index = edge_index[:, keep]
-        edge_attr = edge_attr[keep]
-    
+        pos = sphere_positions.to(self.device, dtype=self.dtype)
+
+        ss_edges, ss_attrs = self.insert_sphere_sphere_edges(pos)
+
+        all_pos, all_node_type = self.reflect(pos)
+        sw_edges, sw_attrs = self.insert_sphere_wall_edges(pos, all_pos)
+
+        edge_index = torch.cat([ss_edges, sw_edges], dim=1)
+        edge_attr = torch.cat([ss_attrs, sw_attrs], dim=0)
+
         return edge_index, edge_attr, all_pos, all_node_type
 
     def create_graph(self, pos, vel_t, vel_tm1, ang_vel_t, ang_vel_tm1, pos_tp1, vel_tp1, ang_vel_tp1):
         """
-        Top-level builder method. Takes raw kinematic data from the dataset, runs the 
-        boundary processing to construct the graph topology, pads the ghost kinematics, 
+        Top-level builder method. Takes raw kinematic data from the dataset, runs the
+        boundary processing to construct the graph topology, pads the ghost kinematics,
         and packages it into a PyTorch Geometric Data object.
         """
         # Ensure all inputs are floated and pushed to the target device
@@ -162,30 +165,25 @@ class SphereWallInteraction:
         vel_tm1  = vel_tm1.float().to(self.device, dtype=self.dtype)
         ang_vel_t = ang_vel_t.float().to(self.device, dtype=self.dtype)
         ang_vel_tm1 = ang_vel_tm1.float().to(self.device, dtype=self.dtype)
-        
+
         pos_tp1 = pos_tp1.float().to(self.device, dtype=self.dtype)
         vel_tp1 = vel_tp1.float().to(self.device, dtype=self.dtype)
         ang_vel_tp1 = ang_vel_tp1.float().to(self.device, dtype=self.dtype)
 
         # Get topology and ghost node features
         edge_index, edge_attr, all_pos, all_node_type = self.process(pos)
-        
-        # Initialize full state tensors for real + ghost nodes (all zeros by default)
-        all_vel = torch.zeros_like(all_pos)
-        all_prev_vel = torch.zeros_like(all_pos)
-        all_angvel = torch.zeros_like(all_pos)
-        all_prev_angvel = torch.zeros_like(all_pos)
-        
-        # Mask to identify real nodes
-        mask_b = (all_node_type == 0).squeeze()
 
-        # Inject real node kinematics. 
-        # Note: Ghost velocities remain exactly 0 since these boundaries are stationary flat walls.
-        all_vel[mask_b] = vel_t
-        all_prev_vel[mask_b] = vel_tm1
-        all_angvel[mask_b] = ang_vel_t
-        all_prev_angvel[mask_b] = ang_vel_tm1
-        
+        # Ghosts are stationary: the walls do not move, so the contact relative velocity is
+        # the sphere's own. Giving a ghost its parent's mirrored velocity instead would make
+        # v_sphere - v_ghost = 2(v.n)n, purely normal, cancelling the tangential slip that
+        # generates spin on an oblique impact.
+        n_ghost = all_pos.size(0) - pos.size(0)
+        zeros = torch.zeros(n_ghost, 3, dtype=self.dtype, device=self.device)
+        all_vel = torch.cat([vel_t, zeros], dim=0)
+        all_prev_vel = torch.cat([vel_tm1, zeros], dim=0)
+        all_angvel = torch.cat([ang_vel_t, zeros], dim=0)
+        all_prev_angvel = torch.cat([ang_vel_tm1, zeros], dim=0)
+
         # Package into PyG Data object
         graph = Data(edge_index=edge_index, edge_attr=edge_attr)
         graph.node_feat = all_node_type
@@ -194,14 +192,14 @@ class SphereWallInteraction:
         graph.prev_vel = all_prev_vel
         graph.ang_vel = all_angvel
         graph.prev_ang_vel = all_prev_angvel
-        
+
         # Targets for supervised training (Ground Truth displacements/changes)
         graph.y_dx = pos_tp1 - pos
         graph.y_dv = vel_tp1 - vel_t
         graph.y_dw = ang_vel_tp1 - ang_vel_t
-        
+
         return graph
-    
+
 def insert_boundary(geo_data, device='cpu', dtype=torch.float32):
     """
     Generates the plane equations (Ax + By + Cz + D = 0) for a standard 3D cuboid.
@@ -215,7 +213,7 @@ def insert_boundary(geo_data, device='cpu', dtype=torch.float32):
         dict: Keys represent face names, values are parameter tensors [A, B, C, D].
     """
     (xmin, ymin, zmin), (xmax, ymax, zmax) = geo_data
-    
+
     # Plane format: [nx, ny, nz, d] where nx*X + ny*Y + nz*Z + d = 0
     return {
         'front':  torch.tensor([ 1,  0,  0, -xmax], dtype=dtype, device=device), # x = xmax -> x - xmax = 0

@@ -2,11 +2,11 @@
 """
 download_data.py
 ================
-Downloads, extracts, and organises DEM simulation data exclusively for the 
+Downloads, extracts, and organises DEM simulation data exclusively for the
 Heterogeneous Gravity Case (case_05_dem_hard) from:
     https://zenodo.org/records/19691595
 
-This script will create a `data/` folder in its current location 
+This script will create a `data/` folder in its current location
 and download the necessary contents into it.
 
 Usage
@@ -163,7 +163,7 @@ def get_gravity_cuboid(keep_zip: bool) -> None:
     """
     # Extracted from the old script
     filename = "RawData_60Spheres_Gravity_Inside_Cuboidal_Enclosure.zip"
-    
+
     dest_root = DATA_DIR / "heterogeneous" / "gravity"
     sentinel = _sentinel(dest_root / "training")
 
@@ -199,7 +199,7 @@ def get_gravity_cylinder(keep_zip: bool) -> None:
     """
     # Extracted from the old script
     filename = "RawData_Extrapolation_2073Spheres_Gravity_Inside_Rotating_Cylinder.zip"
-    
+
     dest_root = DATA_DIR / "heterogeneous" / "gravity" / "rotating_cylinder"
     sentinel = _sentinel(dest_root)
 

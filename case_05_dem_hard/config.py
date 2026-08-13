@@ -21,7 +21,7 @@ for _d in (DATASET_DIR, SAVED_MODELS_DIR, RESULTS_DIR):
 # ---------------------------------------------------------------------------
 SPHERE_DIAMETER = 0.005
 SPHERE_RADIUS = SPHERE_DIAMETER / 2.0
-THRESHOLD = 1.25 * SPHERE_DIAMETER  # 1.25 * 0.005
+THRESHOLD = 1.25 * SPHERE_DIAMETER
 
 # 1. Gravity Cuboid Setup (Training/Validation/Testing)
 GEO_DATA_CUBOID = ((0.0, 0.0, 0.0), (0.03, 0.03, 0.03))
@@ -36,7 +36,7 @@ SAMPLE_TIME_STEP_CYLINDER = 1e-3  # Ground truth save interval for the cylinder 
 # ---------------------------------------------------------------------------
 MODEL_SETTINGS = {
     "batch_size": 64,
-    "epochs": 200,
+    "epochs": 250,
     "lr": 3e-4,
     "nf": 128,
     "n_layers": 2,

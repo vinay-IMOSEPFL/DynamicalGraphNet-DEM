@@ -9,7 +9,6 @@ error, so the reported values reflect accumulated drift rather than one-step acc
 import os
 import shutil
 import torch
-import numpy as np
 import concurrent.futures
 
 def _render_frame_worker(args):
@@ -18,36 +17,36 @@ def _render_frame_worker(args):
     Top-level definition is required for Python's multiprocessing pickling.
     """
     file_path, plot_folder_path, f_idx, total_steps, plot_region, bottom_wall, experiment_name = args
-    
+
     print(f"Rendering rollout step {f_idx + 1} / {total_steps}...")
     data = torch.load(file_path, map_location='cpu')
-    
+
     from case_04_dem_simple.visualization import plot_snapshot_test
     plot_snapshot_test(
         data['pred_pos'].numpy(), data['pred_angpos'].numpy(),
         data['gt_pos'].numpy(), data['gt_angpos'].numpy(),
         data['pred_vel'].numpy(), data['pred_angvel'].numpy(),
-        data['gt_vel'].numpy(), data['gt_angvel'].numpy(),                        
+        data['gt_vel'].numpy(), data['gt_angvel'].numpy(),
         data['mae_pos'].item(), data['mae_vel'].item(), data['mae_angvel'].item(), f_idx,
         plot_folder_path, experiment_name, plot_region=plot_region, bottom_wall=bottom_wall
     )
 
 
-def evaluate_rollout(test_loader, model, interaction, device, train_stats, time_step=1e-4, 
-                     start=0, end=200, plot=False, save_data=False, frequency=1, 
-                     experiment_name='Val', save_folder='.', 
+def evaluate_rollout(test_loader, model, interaction, device, train_stats, time_step=1e-4,
+                     start=0, end=200, plot=False, save_data=False, frequency=1,
+                     experiment_name='Val', save_folder='.',
                      plot_region=(-0.03, 0.03), bottom_wall=False):
     """
     Performs an autoregressive rollout evaluation of the trained dynamics model.
-    
-    Instead of using ground truth data at every step (1-step prediction), this function 
-    feeds the model's own predictions back into itself for 'end - start' time steps. 
+
+    Instead of using ground truth data at every step (1-step prediction), this function
+    feeds the model's own predictions back into itself for 'end - start' time steps.
     This measures the model's stability and error accumulation over long time horizons.
 
     Args:
         test_loader (DataLoader): PyTorch Geometric DataLoader providing the sequential graph data.
         model (nn.Module): The trained Graph Neural Network dynamics solver.
-        interaction (object): Boundary interaction handler (e.g., SphereWallInteraction) to 
+        interaction (object): Boundary interaction handler (e.g., SphereWallInteraction) to
                               update graph topology as particles move.
         device (torch.device): Computation device.
         train_stats (dict): Dictionary of maximum absolute values used for scaling error metrics.
@@ -67,7 +66,7 @@ def evaluate_rollout(test_loader, model, interaction, device, train_stats, time_
                Containing the scaled MAE sequences and the full kinematic history for downstream analysis.
     """
     model.eval()
-    
+
     # Extract normalization factors to compute dimensionless error metrics
     eps = 1e-8
     pos_scale = train_stats['edge_feat_max'].item() + eps
@@ -80,8 +79,8 @@ def evaluate_rollout(test_loader, model, interaction, device, train_stats, time_
 
         # Prepare output directories
         plot_folder_path = os.path.join(save_folder, experiment_name, 'rollout_plots')
-        
-        # Store data universally in a tmp folder first. 
+
+        # Store data universally in a tmp folder first.
         data_folder_path = os.path.join(save_folder, experiment_name, 'tmp_rollout_data')
         if os.path.exists(data_folder_path): shutil.rmtree(data_folder_path)
         os.makedirs(data_folder_path, exist_ok=True)
@@ -92,25 +91,23 @@ def evaluate_rollout(test_loader, model, interaction, device, train_stats, time_
 
         ingraph = None
         total_steps = end - start
-        
-        # ==========================================
-        # STAGE 1: PHYSICS ROLLOUT (GPU BOUND)
-        # ==========================================
+
+        # 1. Autoregressive rollout.
         for i, graph_t0 in enumerate(test_loader):
             if i > end or i >= len(test_loader): break
             if i < start: continue
-            
+
             step_idx = i - start
             print(f"Evaluating rollout step {step_idx + 1} / {total_steps}...")
-            
+
             graph_t0 = graph_t0.to(device)
-            
+
             # Initialize the rollout state on the very first requested frame
-            if i == start: 
+            if i == start:
                 ingraph = graph_t0.detach().clone()
                 # Initialize visual trackers for angular position (orientation)
                 groundtruth_node_angpos = torch.zeros_like(graph_t0.pos)
-                groundtruth_node_angpos[:, -1:] += 1  
+                groundtruth_node_angpos[:, -1:] += 1
                 node_angpos_0 = torch.zeros_like(graph_t0.pos)
                 node_angpos_0[:, -1:] += 1
 
@@ -119,19 +116,19 @@ def evaluate_rollout(test_loader, model, interaction, device, train_stats, time_
 
             # Identify the real particles (ignoring ghost/boundary nodes)
             sphere_node = (ingraph.node_feat == 0).any(dim=1)
-            
+
             # 2. Kinematic Integration (Euler Step)
             node_vel_0 = ingraph.vel
             node_vel_1 = torch.zeros_like(ingraph.vel)
             node_vel_1[sphere_node] = node_vel_0[sphere_node] + dv_pred[sphere_node].detach()
-            
+
             node_angvel_0 = ingraph.ang_vel
             node_angvel_1 = torch.zeros_like(ingraph.vel)
             node_angvel_1[sphere_node] = node_angvel_0[sphere_node] + dw_pred[sphere_node].detach()
-            
+
             node_pos_0 = ingraph.pos
             node_pos_1 = node_pos_0 + dx_pred.detach()
-            
+
             # Update angular positions (orientations) strictly for visualization purposes
             node_angpos_1 = node_angpos_0 + 0.5 * (node_angvel_1 + node_angvel_0) * time_step
             node_angpos_0 = node_angpos_1
@@ -141,17 +138,17 @@ def evaluate_rollout(test_loader, model, interaction, device, train_stats, time_
             pred_vel_sphere = node_vel_1[sphere_node]
             pred_angvel_sphere = node_angvel_1[sphere_node]
             pred_angpos_sphere = node_angpos_1[sphere_node]
-            
+
             # 3. Dynamic Topology Update
             edge_index, edge_attr, pos_updated, _ = interaction.process(pred_pos_sphere.detach())
-            
+
             ingraph.edge_index = edge_index.detach().to(device)
             ingraph.edge_attr = edge_attr.detach().to(device)
             ingraph.pos = pos_updated.detach().to(device)
             ingraph.vel = node_vel_1.detach().to(device)
             ingraph.prev_vel = node_vel_0.detach().to(device)
             ingraph.ang_vel = node_angvel_1.detach().to(device)
-            ingraph.prev_ang_vel = node_angvel_0.detach().to(device) 
+            ingraph.prev_ang_vel = node_angvel_0.detach().to(device)
             ingraph.node_feat = ingraph.node_feat.detach().to(device)
 
             # 4. Ground Truth Tracking
@@ -168,7 +165,7 @@ def evaluate_rollout(test_loader, model, interaction, device, train_stats, time_
             error_pos = torch.mean(torch.abs((pred_pos_sphere - groundtruth_node_pos_particles) / pos_scale))
             error_vel = torch.mean(torch.abs((pred_vel_sphere - groundtruth_node_vel_particles) / vel_scale))
             error_angvel = torch.mean(torch.abs((pred_angvel_sphere - groundtruth_node_angvel_particles) / angvel_scale))
-            
+
             lst_error_pos.append(error_pos.item())
             lst_error_vel.append(error_vel.item())
             lst_error_angvel.append(error_angvel.item())
@@ -199,28 +196,24 @@ def evaluate_rollout(test_loader, model, interaction, device, train_stats, time_
                     groundtruth_node_angvel_particles, groundtruth_node_angpos_particles
                 )))
 
-        # ==========================================
-        # STAGE 2: MULTIPROCESSED PLOTTING (CPU BOUND)
-        # ==========================================
+        # 2. Render frames from the snapshots, one process per core.
         if plot:
             print(f"\nPhysics rollout complete. Rendering frames to {plot_folder_path} using multiprocessing...")
             pt_files = sorted([os.path.join(data_folder_path, f) for f in os.listdir(data_folder_path) if f.endswith('.pt')])
-            
+
             # Prepare the tasks list (filters by frequency to avoid spinning up unnecessary processes)
             tasks = []
             for file_path in pt_files:
                 f_idx = int(os.path.basename(file_path).split('_')[1].split('.')[0])
                 if f_idx % frequency == 0 or f_idx == 0:
                     tasks.append((file_path, plot_folder_path, f_idx, total_steps, plot_region, bottom_wall, experiment_name))
-            
+
             # Map the rendering helper across all available CPU cores
             with concurrent.futures.ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
                 for _ in executor.map(_render_frame_worker, tasks):
                     pass
 
-        # ==========================================
-        # STAGE 2b: TRAJECTORY RECONSTRUCTION
-        # ==========================================
+        # 3. Rebuild the trajectory lists from disk.
         # When save_data is enabled the per-step states were flushed to disk rather than
         # held in RAM, so the in-memory trajectory lists are still empty. Callers
         # (e.g. plot_physics_panel) need them, so rebuild them from the snapshots here.
@@ -236,9 +229,7 @@ def evaluate_rollout(test_loader, model, interaction, device, train_stats, time_
                     snap['gt_pos'], snap['gt_vel'], snap['gt_angvel'], snap['gt_angpos']
                 )))
 
-        # ==========================================
-        # STAGE 3: DATA RETENTION / CLEANUP
-        # ==========================================
+        # 4. Keep or discard the snapshot directory.
         if save_data:
             final_data_folder = os.path.join(save_folder, experiment_name, 'rollout_data')
             if os.path.exists(final_data_folder):
@@ -246,5 +237,5 @@ def evaluate_rollout(test_loader, model, interaction, device, train_stats, time_
             os.rename(data_folder_path, final_data_folder)
         else:
             shutil.rmtree(data_folder_path, ignore_errors=True)
-            
+
         return lst_error_pos, lst_error_vel, lst_error_angvel, predicted_traj_sys, grndtruth_traj_sys

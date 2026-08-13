@@ -14,8 +14,8 @@ from case_04_dem_simple.boundary_model import SphereWallInteraction, insert_boun
 def read_time_step(data_path, time_step):
     """
     Reads the raw DEM simulation data from a CSV file for a specific time step.
-    
-    Extracts the kinematic properties (position, velocity, angular velocity) 
+
+    Extracts the kinematic properties (position, velocity, angular velocity)
     and (not used-->)handles material mapping if multiple sphere densities are present.
 
     Args:
@@ -23,31 +23,31 @@ def read_time_step(data_path, time_step):
         time_step (int): The specific integer time step to read.
 
     Returns:
-        tuple: Tensors for position, angular position (initialized to zero), 
+        tuple: Tensors for position, angular position (initialized to zero),
                velocity, angular velocity, and sphere type (material label).
     """
     filename = f'data_at_timestep_{time_step:03d}.csv'
     filepath = os.path.join(data_path, filename)
     df = pd.read_csv(filepath)
-    
+
     # Extract 3D coordinates into a shape (N, 3) tensor
-    pos = torch.hstack((torch.tensor(df['coordinates:0'].astype(float)).reshape(-1, 1), 
-                        torch.tensor(df['coordinates:1'].astype(float)).reshape(-1, 1), 
+    pos = torch.hstack((torch.tensor(df['coordinates:0'].astype(float)).reshape(-1, 1),
+                        torch.tensor(df['coordinates:1'].astype(float)).reshape(-1, 1),
                         torch.tensor(df['coordinates:2'].astype(float)).reshape(-1, 1)))
-    
+
     # Angular position is generally not provided by the raw DEM output, initialize to zero
     ang_pos = torch.zeros_like(pos)
-    
+
     # Extract 3D translational velocities into a shape (N, 3) tensor
-    vel = torch.hstack((torch.tensor(df['Velocity:0'].astype(float)).reshape(-1, 1), 
-                        torch.tensor(df['Velocity:1'].astype(float)).reshape(-1, 1), 
+    vel = torch.hstack((torch.tensor(df['Velocity:0'].astype(float)).reshape(-1, 1),
+                        torch.tensor(df['Velocity:1'].astype(float)).reshape(-1, 1),
                         torch.tensor(df['Velocity:2'].astype(float)).reshape(-1, 1)))
-    
+
     # Extract 3D angular velocities into a shape (N, 3) tensor
-    ang_vel = torch.hstack((torch.tensor(df['Angular_velocity:0'].astype(float)).reshape(-1, 1), 
-                            torch.tensor(df['Angular_velocity:1'].astype(float)).reshape(-1, 1), 
+    ang_vel = torch.hstack((torch.tensor(df['Angular_velocity:0'].astype(float)).reshape(-1, 1),
+                            torch.tensor(df['Angular_velocity:1'].astype(float)).reshape(-1, 1),
                             torch.tensor(df['Angular_velocity:2'].astype(float)).reshape(-1, 1)))
-    
+
     # Map particle density to a categorical node type (e.g., 1 for material A, 2 for material B)
     if 'Density' in df.columns:
         unique_densities = df['Density'].astype(float).unique()
@@ -65,9 +65,9 @@ def extract_number(fn):
     Parses the integer time step from a standard DEM filename.
     e.g., 'data_at_timestep_015.csv' -> 15
     """
-    try: 
+    try:
         return int(fn.split('.')[0].split('_')[-1])
-    except: 
+    except:
         return None
 
 def get_time_steps(data_path):
@@ -83,11 +83,11 @@ if __name__ == "__main__":
     print("==================================================")
     print(" PREPROCESSING ALL DEM DATASETS")
     print("==================================================")
-    
+
     def process_directory_tree(raw_root, save_root, interaction):
         """
-        Recursively crawls a raw data directory, detects sequences of CSV files, 
-        builds PyTorch Geometric graphs representing the physical states, 
+        Recursively crawls a raw data directory, detects sequences of CSV files,
+        builds PyTorch Geometric graphs representing the physical states,
         and saves them out as serialized PyTorch tensors.
 
         Args:
@@ -95,27 +95,27 @@ if __name__ == "__main__":
             save_root (str): The root directory where processed .pt files will be saved.
             interaction (object): The boundary interaction model used to construct the graphs.
         """
-        if not os.path.exists(raw_root): 
+        if not os.path.exists(raw_root):
             return
-        
+
         for dirpath, dirnames, filenames in os.walk(raw_root):
             # Only process directories that actually contain CSV simulation frames
             if any(f.endswith('.csv') for f in filenames):
                 rel_path = os.path.relpath(dirpath, raw_root)
                 save_dir = os.path.normpath(os.path.join(save_root, rel_path))
                 os.makedirs(save_dir, exist_ok=True)
-                
+
                 print(f"\nProcessing: {save_dir}")
-                
+
                 time_steps = get_time_steps(dirpath)
                 if len(time_steps) < 3:
                     print(f"Not enough timesteps in {dirpath}. Skipping.")
                     continue
-                    
+
                 # We need t-1 (history) and t+1 (target), so we drop the first and last available frames
                 time_steps = time_steps[1:-1]
                 all_graphs = []
-                
+
                 # Sliding window approach to capture the full kinematic state and ground truth targets
                 for t in tqdm(time_steps, desc=os.path.basename(dirpath), unit="step"):
                     pos, _, vel_t, ang_vel_t, _ = read_time_step(dirpath, t)
@@ -144,7 +144,7 @@ if __name__ == "__main__":
     print("\n--- 1. Homogeneous Datasets (Training / Validation / Extrapolation) ---")
     homo_raw = os.path.join(DATA_DIR, "homogeneous")
     homo_save = os.path.join(DATASET_DIR, "homogeneous")
-    
+
     for split in ['training', 'validation', 'extrapolation']:
         split_raw = os.path.join(homo_raw, split)
         split_save = os.path.join(homo_save, split)
@@ -157,7 +157,7 @@ if __name__ == "__main__":
     print("\n--- 3. Benchmark: Oblique Sphere Collisions ---")
     sphere_raw = os.path.join(homo_raw, "benchmark", "oblique_sphere_collisions")
     sphere_save = os.path.join(homo_save, "benchmark", "oblique_sphere_collisions")
-    
+
     if os.path.exists(sphere_raw):
         # Use an effectively infinite bounding box so the spheres only interact with each other
         geo_sphere = ((-100.0, -100.0, -100.0), (100.0, 100.0, 100.0))
@@ -173,14 +173,14 @@ if __name__ == "__main__":
     print("\n--- 4. Benchmark: Oblique Wall Collisions ---")
     wall_raw = os.path.join(homo_raw, "benchmark", "oblique_wall_collisions")
     wall_save = os.path.join(homo_save, "benchmark", "oblique_wall_collisions")
-    
+
     if os.path.exists(wall_raw):
         # Configure a single boundary plane at Z=0 for the wall collision benchmark
         geo_wall = ((-100.0, -100.0, 0.0), (100.0, 100.0, 100.0))
         bounds_wall = insert_boundary(geo_wall, device='cpu')
-        
+
         # Slightly scaled threshold to ensure accurate edge construction near the wall
-        threshold_wall = 1.25 * 0.005 
+        threshold_wall = 1.25 * 0.005
         interaction_wall = SphereWallInteraction(bounds_wall, threshold_wall, device='cpu')
         process_directory_tree(wall_raw, wall_save, interaction_wall)
     else:

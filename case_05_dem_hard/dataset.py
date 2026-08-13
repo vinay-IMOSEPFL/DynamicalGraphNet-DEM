@@ -17,7 +17,7 @@ class DemDataset(Dataset):
         if case_name is not None:
             # Mode 1: Deep search for a specific case across all nested folders
             found_path = None
-            
+
             # os.walk completely maps out the directory tree, no matter how deep
             for dirpath, dirnames, filenames in os.walk(root):
                 # Check if appending the case_name to the current directory leads to our file
@@ -26,17 +26,17 @@ class DemDataset(Dataset):
                     found_path = potential_path
                     self.split_dir = os.path.join(dirpath, case_name)
                     break
-            
+
             if found_path is None:
                 raise ValueError(f"Case '{case_name}' with a 'graph_list.pt' was not found anywhere under {root}.")
-            
+
             # weights_only=False is required from PyTorch 2.6 onwards: these files
             # hold pickled PyTorch Geometric `Data` objects, not plain state dicts.
             graphs = torch.load(found_path, weights_only=False)
             if not isinstance(graphs, (list, tuple)):
                 raise ValueError(f"`graph_list.pt` in {case_name} must be a list of Data, got {type(graphs)}")
             self.graph_list.extend(graphs)
-            
+
         else:
             # Mode 2: Original behavior, load all cases in a specific split
             self.split_dir = os.path.join(root, split)
@@ -56,7 +56,7 @@ class DemDataset(Dataset):
                     # Warning instead of crashing, just in case there are empty leftover folders
                     print(f"Warning: Skipping '{case}' as no 'graph_list.pt' was found.")
                     continue
-                
+
                 graphs = torch.load(path, weights_only=False)
                 if not isinstance(graphs, (list, tuple)):
                     raise ValueError(f"`graph_list.pt` in {case} must be a list of Data, got {type(graphs)}")
@@ -76,7 +76,7 @@ class DemDataset(Dataset):
         Batch the entire dataset into one big graph and compute mean & std values for scaling.
         """
         loader = DataLoader(self, batch_size=len(self), shuffle=False)
-        stat_graph = next(iter(loader)) 
+        stat_graph = next(iter(loader))
         if device is not None:
             stat_graph = stat_graph.to(device)
 
@@ -98,8 +98,8 @@ class DemDataset(Dataset):
             "dv_mean": all_dv.mean(dim=0),
             "dv_std":  all_dv.std(dim=0),
             "dw_mean": all_dw.mean(dim=0),
-            "dw_std":  all_dw.std(dim=0),    
+            "dw_std":  all_dw.std(dim=0),
             "dx_mean": all_dx.mean(dim=0),
-            "dx_std":  all_dx.std(dim=0),             
+            "dx_std":  all_dx.std(dim=0),
         }
         return stats

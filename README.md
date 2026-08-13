@@ -1,59 +1,68 @@
-# Dynami-CAL GraphNet: Discrete Element Method (DEM) Dynamics
+# Dynami-CAL GraphNet: Discrete Element Method
 
-This repository contains the standalone PyTorch implementation of the Discrete Element Method (DEM) experiments for the paper:
+PyTorch implementation of the granular-mechanics experiments for:
 
-> **A Physics-Informed Graph Neural Network Conserving Linear and Angular Momentum for Dynamical Systems**
-> Sharma & Fink — *Nature Communications*, 2026
-> https://www.nature.com/articles/s41467-025-67802-5
+> **A physics-informed graph neural network conserving linear and angular momentum for dynamical systems**
+> Vinay Sharma and Olga Fink, *Nature Communications*, 2026
+> [10.1038/s41467-025-67802-5](https://www.nature.com/articles/s41467-025-67802-5)
 
-The full codebase — covering human motion, molecular dynamics, and N-body experiments — is available in the main repository. This repository isolates the 3D granular mechanics experiments as two pipelines: **Case 04** (homogeneous) and **Case 05** (heterogeneous, under gravity).
+The network predicts pairwise contact impulses between rigid spheres. Linear and angular
+momentum are conserved by construction, not by a penalty term: each contact carries a local
+frame that flips under exchange of its two endpoints, so the impulse the sender receives is
+exactly the negative of the receiver's, for any parameter values.
 
-Data is hosted on Zenodo at https://zenodo.org/records/19691595 and is downloaded automatically by the `get_data.py` script in each case folder.
+This repository covers the two 3D Discrete Element Method (DEM) cases. The human motion,
+molecular dynamics and N-body experiments live in the main repository.
+
+<p align="center">
+  <img src="docs/assets/case04_case07_rollout.gif" width="49%" alt="Case 04 rollout">
+  <img src="docs/assets/case05_rotating_cylinder.gif" width="49%" alt="Rotating cylinder">
+</p>
+<p align="center">
+  <em>Left: 60 spheres in a sealed cuboid, 1499 predicted steps. Right: zero-shot
+  extrapolation to a 2,073-sphere rotating drum, a geometry never seen in training.</em>
+</p>
 
 ---
 
-## Repository Structure
+## Contents
 
+- [Quick start](#quick-start)
+- [Installation](#installation)
+- [Step 1: Download the data](#step-1-download-the-data)
+- [Step 2: Build the graphs](#step-2-build-the-graphs)
+- [Step 3: Case 04, homogeneous spheres](#step-3-case-04-homogeneous-spheres)
+- [Step 4: Case 05, gravity and a rotating drum](#step-4-case-05-gravity-and-a-rotating-drum)
+- [Results](#results)
+- [Metrics](#metrics)
+- [Repository layout](#repository-layout)
+- [Known limitations](#known-limitations)
+- [Citation](#citation)
+
+---
+
+## Quick start
+
+Trained checkpoints ship with the repository, so you can reproduce every figure below without
+training anything.
+
+```bash
+conda env create -f environment.yml
+conda activate dem-dyngnet
+
+python case_04_dem_simple/get_data.py        # ~4 GB from Zenodo
+python case_04_dem_simple/preprocess.py      # ~12 min
+python main_dem_simple.py --mode test --plot --save_data
 ```
-DynamicalGraphNet-DEM/
-├── model/
-│   └── model_dem.py                  # DynamicsSolver GNN architecture
-├── utils/
-│   ├── trainer_dem.py                # Training loop, gradient accumulation, checkpointing
-│   └── utils_dem.py                  # MLP builder, momentum and energy helpers
-│
-├── case_04_dem_simple/               # Homogeneous interaction cases
-│   ├── config.py                     # Hyperparameters, geometry, directory paths
-│   ├── boundary_model.py             # Ghost-node cuboid reflections
-│   ├── dataset.py                    # PyG dataset loader
-│   ├── get_data.py                   # Zenodo downloader
-│   ├── preprocess.py                 # CSV to PyG graphs, sliding (t-1, t, t+1) window
-│   ├── rollout_evaluator.py          # Single-timestep autoregressive rollout
-│   └── visualization.py              # 3D frames, physics panels, GIF builder
-│
-├── case_05_dem_hard/                 # Heterogeneous gravity and cylinder cases
-│   ├── config.py
-│   ├── boundary_model.py             # Cuboid and rotating cylinder boundaries
-│   ├── dataset.py
-│   ├── get_data.py
-│   ├── preprocess.py
-│   ├── rollout_evaluator.py          # Dual-timestep micro-stepping rollout
-│   ├── render_frames.py              # Standalone renderer for saved .pt snapshots
-│   └── visualization.py
-│
-├── main_dem_simple.py                # Entry point for Case 04
-├── main_dem_hard.py                  # Entry point for Case 05
-│
-├── decisions.md                      # Reproduction log: measurements, deviations, findings
-├── environment.yml                   # Pinned Conda environment
-└── requirements.txt                  # Pinned pip requirements
-```
+
+Outputs land in `case_04_dem_simple/results/case_07_rollout/`.
 
 ---
 
 ## Installation
 
-The environment is pinned in two equivalent specifications.
+Requires Python 3.12 and, for training, an NVIDIA GPU. Everything was verified end to end on
+Linux with an RTX 2080 Ti and on macOS with CPU only.
 
 **Conda**
 
@@ -69,8 +78,6 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Environment details
-
 | Package | Version |
 | --- | --- |
 | Python | 3.12 |
@@ -83,101 +90,94 @@ pip install -r requirements.txt
 | imageio | 2.33.1 |
 | tqdm | 4.66.5 |
 
-These versions were verified end to end — download, preprocess, train, evaluate, benchmark, render — on macOS (CPU) and on Linux with an NVIDIA RTX 2080 Ti.
-
-Three notes on these choices:
-
-- **PyTorch version matters.** Preprocessed graphs are PyTorch Geometric `Data` objects loaded with `weights_only=False`. That argument is required from PyTorch 2.6 onwards, where the `torch.load` default flipped to `weights_only=True`; without it, dataset loading fails outright.
-- **The compiled PyG extensions are not needed.** Only `Data` and `DataLoader` are used, so `torch-scatter`, `torch-sparse` and `torch-cluster` can be skipped.
-- **No separate step is needed for CUDA.** The default PyPI wheel for `linux-x86_64` is already the CUDA build (torch 2.7.0 ships CUDA 12.6), so `pip install -r requirements.txt` yields a GPU-capable environment as-is. Use `--index-url` only to pin a different CUDA version or to force a CPU-only build on Linux. The macOS wheel is CPU-only.
-
-Everything installs through pip rather than conda deliberately. Mixing conda-forge numpy with the pip PyTorch wheel places two OpenMP runtimes in one process, which aborts the interpreter on import in an order-dependent way. See `decisions.md` §2.3.
-
-Verify the GPU is actually usable before starting a long run:
+Confirm the GPU is visible before starting a long run:
 
 ```bash
-python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
 ```
+
+Three notes on the environment:
+
+- **PyTorch 2.6 or newer is required.** Preprocessed graphs are PyTorch Geometric `Data`
+  objects loaded with `weights_only=False`, an argument that only exists from 2.6 onward.
+- **The compiled PyG extensions are not needed.** Only `Data` and `DataLoader` are used, so
+  `torch-scatter`, `torch-sparse` and `torch-cluster` can be skipped.
+- **No separate CUDA step.** The default PyPI wheel for `linux-x86_64` is already the CUDA
+  build. Use `--index-url` only to pin a different CUDA version or force a CPU-only build.
+
+Install through pip rather than conda for numpy and matplotlib. Mixing conda-forge numpy with
+the pip PyTorch wheel puts two OpenMP runtimes in one process, which aborts the interpreter on
+import in an order-dependent way.
 
 ---
 
-## Step 1: Download and preprocess the data
+## Step 1: Download the data
 
-Each case fetches its raw simulation data from Zenodo and converts it to PyTorch Geometric graph sequences. This is a one-time step.
+Simulation data is hosted on Zenodo at
+[10.5281/zenodo.19691595](https://zenodo.org/records/19691595) and is fetched automatically:
 
 ```bash
 python case_04_dem_simple/get_data.py
 python case_05_dem_hard/get_data.py
 ```
 
-Both scripts show a progress bar, skip files already present, and delete `.zip` archives after extraction. Case 05 accepts `--keep-zip` to retain the archives; Case 04 always removes them.
+Both scripts resume, skip files already present, and delete the `.zip` archives after
+extraction. Case 05 accepts `--keep-zip` to retain them.
 
-**Case 04 layout:**
+<details>
+<summary>Directory layout produced</summary>
+
 ```
 case_04_dem_simple/data/homogeneous/
-├── training/        case_01 … case_05
+├── training/        case_01 … case_05      60 spheres, sealed cuboid
 ├── validation/      case_06
-├── extrapolation/   case_07
+├── extrapolation/   case_07                held out
 └── benchmark/
-    ├── oblique_wall_collisions/    10_deg, 30_deg, 45_deg, 60_deg, 90_deg
-    └── oblique_sphere_collisions/  101 timestep files
-```
+    ├── oblique_wall_collisions/    10, 30, 45, 60, 90 degrees
+    └── oblique_sphere_collisions/  two spheres in free space
 
-**Case 05 layout:**
-```
 case_05_dem_hard/data/heterogeneous/gravity/
-├── training/          case_01 … case_05
+├── training/          case_01 … case_05    mixed densities, under gravity
 ├── validation/        case_06
 ├── extrapolation/     case_07
-└── rotating_cylinder/ 2001 timestep files
+└── rotating_cylinder/ 2,073 spheres in a rotating drum
 ```
 
-Then build the graphs:
+</details>
+
+---
+
+## Step 2: Build the graphs
 
 ```bash
-python case_04_dem_simple/preprocess.py
-python case_05_dem_hard/preprocess.py
+python case_04_dem_simple/preprocess.py     # ~12 min
+python case_05_dem_hard/preprocess.py       # ~25 min, cylinder dominates
 ```
 
-Graph topology comes from the boundary interaction model: real sphere positions are reflected across the walls to create ghost nodes, and edges connect all node pairs within the interaction threshold (1.25 × sphere diameter). The sliding (t−1, t, t+1) window drops the first and last frame of each sequence, so a 1501-frame case yields 1499 graphs.
-
-Expected output:
+Each frame becomes one graph. Nodes are the spheres plus one ghost node per wall per sphere;
+edges connect pairs within 1.25 sphere diameters. A sliding (t−1, t, t+1) window drops the
+first and last frame, so a 1501-frame simulation yields 1499 graphs.
 
 | Split | Graphs |
 | --- | --- |
-| Case 04 and Case 05 cuboid cases (`case_01` … `case_07`) | 1499 each |
-| Case 04 `oblique_sphere_collisions` | 99 |
-| Case 04 `oblique_wall_collisions/{10,30,45,60,90}_deg` | 199 each |
-| Case 05 `rotating_cylinder` | 1999 (8,292 nodes each) |
+| Cuboid cases (`case_01` … `case_07`), both cases | 1499 each |
+| `oblique_sphere_collisions` | 99 |
+| `oblique_wall_collisions/{10,30,45,60,90}_deg` | 199 each |
+| `rotating_cylinder` | 1999, 8,292 nodes each |
 
-Preprocessing is single-threaded and CPU-bound; the cylinder dominates. Budget roughly 12 minutes for Case 04 and 25 minutes for Case 05, and around 3 GB of disk for the two `dataset/` directories.
+Budget about 3 GB for the two `dataset/` directories.
 
----
-
-## Checkpoints
-
-Trained checkpoints for both cases ship with this repository:
-
-```
-case_04_dem_simple/saved_models/model_checkpoint_best_val.pth
-case_05_dem_hard/saved_models/model_checkpoint_best_val.pth
-```
-
-Both were trained with the hyperparameters below, so the evaluation modes can be run directly without training first.
-
-If you retrain, note that a **missing** checkpoint does not stop evaluation — the pipeline proceeds with randomly initialized weights and still writes plausible-looking GIFs and physics panels. Case 04's `--mode test` prints a warning in that situation; **Case 05 prints nothing at all**. Before treating any output as a result, confirm the log contains
-
-```
-Loaded best validation model from .../model_checkpoint_best_val.pth
-```
+> **Rebuild the graphs whenever `boundary_model.py` changes.** The graphs on disk encode the
+> boundary construction, and training reads them while evaluation rebuilds graphs live. A
+> stale `dataset/` therefore trains on one thing and scores on another, with no error raised.
 
 ---
 
-## Step 2: Case 04 — homogeneous
+## Step 3: Case 04, homogeneous spheres
 
-60 identical spheres inside a stationary 0.03 m cuboidal enclosure, no external forces, model timestep 1×10⁻⁴ s.
-
-**Hyperparameters** (`case_04_dem_simple/config.py`): learning rate 3×10⁻⁴, batch size 64, 200 epochs, latent size 128, 5 message-passing rounds, Adam.
+60 identical spheres in a sealed 0.03 m cuboid, no external forces, timestep 1×10⁻⁴ s.
+Hyperparameters live in `case_04_dem_simple/config.py`: Adam, learning rate 3×10⁻⁴, batch 64,
+250 epochs, latent width 128, 5 message-passing rounds.
 
 ```bash
 # Train on cases 01-05, validating on case 06 every 5 epochs
@@ -186,95 +186,184 @@ python main_dem_simple.py --mode train
 # Autoregressive rollout on the held-out case 07
 python main_dem_simple.py --mode test --plot --save_data
 
-# Two-sphere oblique collisions in free space
+# Two spheres colliding obliquely in free space
 python main_dem_simple.py --mode benchmark_sphere_collisions --plot
 
-# Single-sphere wall impacts at 10, 30, 45, 60 and 90 degrees
+# One sphere striking a wall at 10, 30, 45, 60 and 90 degrees
 python main_dem_simple.py --mode benchmark_wall_collisions --plot
 ```
 
-`--plot` enables frame rendering and GIF generation. `--save_data` additionally keeps the per-step `.pt` snapshots under `results/` for later re-rendering or analysis. `--save_plot` retains the individual PNG frames after the GIF is built.
+| Flag | Effect |
+| --- | --- |
+| `--plot` | Render frames and assemble a GIF |
+| `--save_data` | Keep per-step `.pt` snapshots under `results/` for later analysis |
+| `--save_plot` | Keep the individual PNG frames after the GIF is built |
 
-Checkpoint selection uses a 200-step autoregressive rollout on the validation case, scored by the sum of the scaled position, velocity and angular-velocity errors.
+Checkpoints are selected on a 200-step rollout of the validation case, scored by the summed
+position, velocity and angular-velocity errors.
 
-## Step 3: Case 05 — heterogeneous, under gravity
+---
 
-Adds gravity via an external-force MLP (`use_ext_force=True`) and a rotating cylindrical boundary. The gravity cuboid trains at 1×10⁻⁴ s; the cylinder ground truth is saved at 1×10⁻³ s.
+## Step 4: Case 05, gravity and a rotating drum
 
-**Hyperparameters** (`case_05_dem_hard/config.py`): learning rate 3×10⁻⁴, batch size 64, 200 epochs, latent size 128, 5 message-passing rounds, Adam, external-force MLP enabled.
+Adds gravity through an external-force head and a rotating cylindrical boundary. Same
+hyperparameters, plus `use_ext_force: True`.
 
 ```bash
-# Train on gravity cases 01-05, validating on case 06 every 5 epochs
 python main_dem_hard.py --mode train
-
-# Autoregressive rollout on the cuboid case 06
-python main_dem_hard.py --mode test --plot --save_data
-
-# Zero-shot extrapolation to the 2,073-sphere rotating cylinder
-python main_dem_hard.py --mode cylinder --plot --save_data
+python main_dem_hard.py --mode test --plot --save_data       # cuboid, case 06
+python main_dem_hard.py --mode cylinder --plot --save_data   # rotating drum
 ```
 
-**Temporal synchronization.** The solver integrates at 1×10⁻⁴ s while the cylinder reference data is stored at 1×10⁻³ s, so `evaluate_rollout` takes 10 internal micro-steps before comparing against the next ground-truth frame. The count is derived from `SAMPLE_TIME_STEP_CYLINDER / SAMPLE_TIME_STEP_CUBOID` in `config.py`; for the cuboid modes the ratio is 1 and the rollout advances one model step per frame.
+**Timestep synchronisation.** The solver integrates at 1×10⁻⁴ s while the cylinder reference
+data is stored at 1×10⁻³ s, so the rollout takes 10 internal micro-steps per reference frame.
+The ratio is read from `config.py`; for the cuboid modes it is 1.
 
-The cylinder run is the expensive one: 1,998 sync points × 10 micro-steps ≈ 20,000 forward passes over an 8,292-node graph, with a full pairwise distance computation and graph rebuild at every micro-step. Expect roughly 20 minutes on an RTX 2080 Ti and about 400 MB of snapshots with `--save_data`.
+The cylinder is the expensive run: 1,998 sync points × 10 micro-steps ≈ 20,000 forward passes
+over an 8,292-node graph, rebuilt at every micro-step. Expect ~20 minutes on an RTX 2080 Ti.
+
+To re-render saved snapshots without recomputing the physics:
+
+```bash
+python case_05_dem_hard/render_frames.py \
+    --data_dir case_05_dem_hard/results/rotating_cylinder_rollout/rollout_data \
+    --cylinder --frequency 25
+```
+
+---
+
+## Results
+
+Produced by the shipped checkpoints. Errors are dimensionless, divided by training-set maxima.
+
+### Case 04: held-out case 07
+
+| Metric | Value |
+| --- | --- |
+| Position MAE, 1499 steps | 1.615 |
+| Velocity MAE | 0.137 |
+| Angular velocity MAE | 0.161 |
+| Position MAE, first 600 steps | 1.037 |
+
+<p align="center"><img src="docs/assets/case04_physics_panel.png" width="85%" alt="Case 04 conservation panel"></p>
+
+### Wall impact: spin generated by an oblique strike
+
+A single sphere strikes a wall at five angles. Spin about the y-axis is the physical response;
+x and z should stay at zero.
+
+<p align="center">
+  <img src="docs/assets/case04_wall_impact_components.png" width="55%" alt="Angular velocity components after wall impact">
+  <img src="docs/assets/case04_wall_impact_magnitude.png" width="42%" alt="Angular velocity magnitude after wall impact">
+</p>
+
+| Impact angle | 10° | 30° | 45° | 60° | 90° |
+| --- | --- | --- | --- | --- | --- |
+| Reference (rad/s) | 252 | 243 | 211 | 162 | 0 |
+| Predicted (rad/s) | 191 | 228 | 201 | 150 | 0 |
+
+### Sphere–sphere collision
+
+<p align="center">
+  <img src="docs/assets/case04_oblique_spheres.gif" width="48%" alt="Oblique sphere collision">
+  <img src="docs/assets/case04_oblique_panel.png" width="48%" alt="Oblique collision panel">
+</p>
+
+### Case 05: gravity, and zero-shot transfer to the drum
+
+| Rollout | Position MAE | Velocity MAE | Absolute position error |
+| --- | --- | --- | --- |
+| Cuboid under gravity, 1498 steps | 0.673 | 0.103 | 4.2 mm |
+| Rotating drum, 1998 steps | 2.576 | 0.039 | 16.1 mm |
+
+The drum is a zero-shot transfer: a curved rotating boundary and 35× more spheres than
+anything in training. Error stays bounded across 20,000 forward passes rather than growing.
+
+<p align="center">
+  <img src="docs/assets/case05_gravity_rollout.gif" width="48%" alt="Case 05 gravity rollout">
+  <img src="docs/assets/case05_physics_panel.png" width="48%" alt="Case 05 conservation panel">
+</p>
 
 ---
 
 ## Metrics
 
-`evaluate_rollout` returns per-step error sequences for position, velocity and angular
-velocity. They are **dimensionless**, divided by training-set maxima: `edge_feat_max` for
-position (6.25×10⁻³ m — the interaction cutoff, not the box size), `node_vel_max` for
-velocity, and `node_angvel_max` for angular velocity. During training the mean of the three
-is printed every 5 epochs as the validation score used for checkpoint selection.
+`evaluate_rollout` returns per-step position, velocity and angular-velocity errors. They are
+dimensionless, divided by training-set maxima: `edge_feat_max` for position (6.25×10⁻³ m, the
+interaction cutoff rather than the box size), `node_vel_max` for velocity, `node_angvel_max`
+for angular velocity. The mean of the three is printed every 5 epochs during training and used
+for checkpoint selection.
 
-The pipeline does not serialize these sequences; capture them from the returned values if
-you need them for downstream analysis.
+Case 05 additionally writes absolute errors into each snapshot: `mae_pos` in millimetres,
+`mae_vel` in m/s, `mae_ang` in rad/s. These are not the dimensionless values.
+
+Neither pipeline serialises the per-step error sequences. Capture them from the return value of
+`evaluate_rollout` if you need them.
 
 ---
 
-## Standalone frame renderer
+## Repository layout
 
-Case 05 includes `render_frames.py` for re-rendering saved `.pt` snapshots without re-running the physics — useful for changing frame frequency or recovering visualizations from a run where `--plot` was omitted. It requires snapshots from a `--save_data` run. There is no equivalent script for Case 04.
+```
+model/model_dem.py             Network: edge frames, conserved impulses, integration loop
+utils/trainer_dem.py           Training loop, gradient accumulation, checkpointing
+utils/utils_dem.py             MLP builder
 
-Paths resolve relative to the working directory, so from the repository root the data directory is `case_05_dem_hard/results/...`:
+case_04_dem_simple/            Homogeneous spheres in a sealed cuboid
+  config.py                    Geometry, hyperparameters, paths
+  boundary_model.py            Ghost-node walls, graph construction
+  dataset.py  preprocess.py  get_data.py
+  rollout_evaluator.py         Autoregressive rollout
+  visualization.py             Frames, conservation panels, GIFs
 
-```bash
-python case_05_dem_hard/render_frames.py \
-    --data_dir case_05_dem_hard/results/case_06_gravity_rollout/rollout_data \
-    --frequency 10
+case_05_dem_hard/              Mixed densities under gravity, plus the rotating drum
+  boundary_model.py            Cuboid walls and rotating cylinder
+  render_frames.py             Re-render saved snapshots
+  (otherwise mirrors case_04)
 
-python case_05_dem_hard/render_frames.py \
-    --data_dir case_05_dem_hard/results/rotating_cylinder_rollout/rollout_data \
-    --cylinder \
-    --frequency 25
+main_dem_simple.py             Entry point, Case 04
+main_dem_hard.py               Entry point, Case 05
+decisions.md                   Reproduction log: measurements, deviations, defects found
 ```
 
-It renders frames across available CPU cores with `ProcessPoolExecutor` and compiles a GIF. It does not produce a physics conservation panel.
-
 ---
 
-## Reproduction notes
+## Known limitations
 
-`decisions.md` is a full log of the reproduction: measured timings, hardware, every deviation and its rationale, and the defects found and fixed in the original code. Points worth knowing before starting:
+Measured, and stated so results are not over-read.
 
-- **Training benefits from a GPU; rollouts do not.** Training epochs run about 4× faster on an RTX 2080 Ti than on a 14-core Apple M4 Pro, but the 200-step validation rollout is roughly 1.5× *slower* on the GPU. The rollout is sequential over a ~420-node graph, so kernel-launch latency dominates. The cylinder is the one inference workload large enough to benefit.
-- **Case 05's `--mode test` evaluates `case_06`**, which is also the validation case used for checkpoint selection. It is therefore not a held-out generalization result. Case 04's `--mode test` uses the genuinely held-out `case_07`.
-- **Spheres can leave the enclosure during long rollouts.** A wall ghost is a mirror image, so the sphere-to-ghost separation is twice the sphere's distance to the wall. Tested against the same `THRESHOLD` as sphere-sphere pairs, this gives the wall half the interaction range of a particle (0.625 mm of surface gap versus 1.25 mm). A fast sphere can cross the band before the model reverses it, and beyond 3.125 mm past the plane no wall edge exists, so nothing pulls it back. In a 1499-step Case 04 rollout roughly a quarter of the spheres end up outside the box, drifting ballistically. `decisions.md` §21 has the measurements and the candidate fixes.
-- **Rendering spawns one process per CPU core.** On a host with many cores and limited memory, cap `max_workers` in `rollout_evaluator.py`.
-- **Results are single-seed.** Runs are seeded (`set_seed(100)`) but no seed-variance study was performed, so no error bars accompany the reported numbers.
+- **A few spheres escape during long rollouts.** The wall barrier is finite: beyond 3.125 mm
+  past the plane no wall edge exists, so a sphere fast enough to cross that band in one step is
+  never pushed back. Measured pass-through speed is 4.75 m/s against 3.81 m/s initial speed in
+  the data. Typically 4 of 60 spheres escape over 1499 steps and then drift in straight lines.
+  They carry most of the apparent late-time energy excess; the spheres that remain track the
+  reference energy to within about 40%.
+- **Spurious spin components on wall impact.** The x and z components should be identically
+  zero and instead reach a few rad/s against a y-axis response of 150–230 rad/s.
+- **Case 05's `--mode test` evaluates `case_06`**, which is also the validation case used for
+  checkpoint selection, so it is not a held-out generalization result. Case 04's `--mode test`
+  uses the genuinely held-out `case_07`.
+- **Rendering spawns one process per CPU core.** Cap `max_workers` in `rollout_evaluator.py` on
+  a machine with many cores and little memory.
+- **Single seed.** Runs are seeded with `set_seed(100)`, but no seed-variance study was
+  performed, so no error bars accompany these numbers.
+- **A missing checkpoint does not stop evaluation.** The pipeline proceeds with random weights
+  and still writes plausible-looking GIFs. Confirm the log contains
+  `Loaded best validation model from ...` before treating any output as a result.
+
+`decisions.md` records the full reproduction log, including defects found in the original code
+and the measurements behind each of the points above.
 
 ---
 
 ## Citation
 
 ```bibtex
-@article{dyngnet2026,
+@article{sharma2026dyngnet,
   title   = {A physics-informed graph neural network conserving linear and angular momentum for dynamical systems},
   author  = {Sharma, Vinay and Fink, Olga},
   journal = {Nature Communications},
   year    = {2026},
-  doi     = {10.1038/s41467-025-67802-5},
-  url     = {https://www.nature.com/articles/s41467-025-67802-5}
+  doi     = {10.1038/s41467-025-67802-5}
 }
 ```

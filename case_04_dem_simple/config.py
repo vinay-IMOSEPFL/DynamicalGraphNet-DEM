@@ -22,19 +22,19 @@ for _d in (DATASET_DIR, SAVED_MODELS_DIR, RESULTS_DIR):
 GEO_DATA = ((0, 0, 0), (0.03, 0.03, 0.03))
 SPHERE_DIAMETER = 0.005
 SPHERE_RADIUS = SPHERE_DIAMETER / 2.0
-THRESHOLD = 1.25 * SPHERE_DIAMETER  # 1.25 * 0.005
-SAMPLE_TIME_STEP = 1e-4             # 1e-4
+THRESHOLD = 1.25 * SPHERE_DIAMETER
+SAMPLE_TIME_STEP = 1e-4             # Ground-truth save interval, seconds
 
 # ---------------------------------------------------------------------------
 # Model and training hyperparameters
 # ---------------------------------------------------------------------------
 MODEL_SETTINGS = {
-    "batch_size": 64,       # From train_loader
-    "epochs": 200,          # Paper: "Training was conducted for 200 epochs"
+    "batch_size": 64,
+    "epochs": 250,
     "lr": 3e-4,             # Paper: "a learning rate of 3 x 10^-4", Adam
-    "nf": 128,              # latent_size
+    "nf": 128,              # Latent width
     "n_layers": 2,
-    "num_msgs": 5,          # From DynamicsSolver init
+    "num_msgs": 5,          # Integration sub-steps per sample step
     "time_step": SAMPLE_TIME_STEP,
     "threshold": THRESHOLD,
     "node_in_f": 1,

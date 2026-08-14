@@ -425,6 +425,11 @@ they are funded, and you may redistribute and build on the code so long as the n
 with it. For commercial use, contact [EPFL's Technology Transfer Office](https://tto.epfl.ch/)
 or the IMOS laboratory.
 
+EPFL's signed bilateral agreement for this software is included as
+[docs/EPFL_NonCommercial_License_Agreement.pdf](docs/EPFL_NonCommercial_License_Agreement.pdf),
+for reference and for organisations that require a countersigned instrument. It adds no
+restrictions to use under the license above.
+
 ---
 
 ## Citation

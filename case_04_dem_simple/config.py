@@ -38,6 +38,9 @@ MODEL_SETTINGS = {
     "time_step": SAMPLE_TIME_STEP,
     "threshold": THRESHOLD,
     "node_in_f": 1,
+    # No external field in this case: the spheres are sealed in a cuboid with no
+    # gravity, so the system is closed and its momentum is conserved.
+    "use_ext_force": False,
 }
 
 # ---------------------------------------------------------------------------

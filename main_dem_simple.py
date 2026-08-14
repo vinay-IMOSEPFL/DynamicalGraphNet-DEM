@@ -89,7 +89,8 @@ def main():
         sample_step=SAMPLE_TIME_STEP,
         train_stats=train_stats,
         num_msgs=MODEL_SETTINGS.get("num_msgs", 5),
-        latent_size=MODEL_SETTINGS.get("nf", 128)
+        latent_size=MODEL_SETTINGS.get("nf", 128),
+        ext_force=MODEL_SETTINGS.get("use_ext_force", False)
     ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=MODEL_SETTINGS.get("lr", 3e-4))

@@ -269,6 +269,12 @@ Adds gravity and a rotating cylindrical boundary. Hyperparameters in
 Gravity is one learned scalar: an acceleration along the y axis, applied to every sphere on
 each sub-step. The direction is fixed in the model, so only the magnitude is learned.
 
+It is switched by `use_ext_force` in the case config, `True` here and `False` for case 04,
+whose cuboid is sealed and has no external field. With it off the head is not built at all,
+so nothing outside the contact model can change the system's total momentum. Checkpoints are
+tied to the setting they were trained under: a model saved with the head on will not load
+with it off, and the reverse.
+
 ```bash
 python main_dem_hard.py --mode train
 python main_dem_hard.py --mode test --plot --save_data       # cuboid, case 06

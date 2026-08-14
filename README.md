@@ -417,6 +417,16 @@ and the measurements behind each of the points above.
 
 ---
 
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE.md). Research, teaching and any other noncommercial
+use is permitted, including at educational and public research institutions regardless of how
+they are funded, and you may redistribute and build on the code so long as the notice travels
+with it. For commercial use, contact [EPFL's Technology Transfer Office](https://tto.epfl.ch/)
+or the IMOS laboratory.
+
+---
+
 ## Citation
 
 ```bibtex

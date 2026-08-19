@@ -8,9 +8,10 @@ integrates the spheres. Momentum is conserved by construction rather than by a p
 See the accompanying paper for the formulation.
 """
 
-# (c) All rights reserved. ECOLE POLYTECHNIQUE FEDERALE DE LAUSANNE, Switzerland,
-# Laboratory of Intelligent Maintenance and Operations Systems (IMOS), 2025.
-# Authors: Vinay Sharma and Olga Fink
+# (c) All rights reserved. ECOLE POLYTECHNIQUE FEDERALE DE LAUSANNE (EPFL),
+# Switzerland, 2025.
+# Authors: Vinay Sharma and Olga Fink, Laboratory of Intelligent Maintenance and
+# Operations Systems (IMOS).
 # Released under the Non-Commercial License Agreement in LICENSE.txt.
 
 import torch

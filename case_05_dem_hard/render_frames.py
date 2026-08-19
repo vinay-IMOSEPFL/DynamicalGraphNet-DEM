@@ -6,9 +6,10 @@ multiprocessing to rapidly generate 3D frame plots, compile an animated GIF,
 and generate global physics conservation panels (Energy/Momentum).
 """
 
-# (c) All rights reserved. ECOLE POLYTECHNIQUE FEDERALE DE LAUSANNE, Switzerland,
-# Laboratory of Intelligent Maintenance and Operations Systems (IMOS), 2025.
-# Authors: Vinay Sharma and Olga Fink
+# (c) All rights reserved. ECOLE POLYTECHNIQUE FEDERALE DE LAUSANNE (EPFL),
+# Switzerland, 2025.
+# Authors: Vinay Sharma and Olga Fink, Laboratory of Intelligent Maintenance and
+# Operations Systems (IMOS).
 # Released under the Non-Commercial License Agreement in LICENSE.txt.
 
 import os

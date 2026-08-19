@@ -11,6 +11,11 @@ Extends the homogeneous case's cuboid and oblique-wall rendering with:
 4. Physics panels tracking conservation quantities over the rollout.
 """
 
+# (c) All rights reserved. ECOLE POLYTECHNIQUE FEDERALE DE LAUSANNE, Switzerland,
+# Laboratory of Intelligent Maintenance and Operations Systems (IMOS), 2025.
+# Authors: Vinay Sharma and Olga Fink
+# Released under the Non-Commercial License Agreement in LICENSE.txt.
+
 import os
 import torch
 import numpy as np

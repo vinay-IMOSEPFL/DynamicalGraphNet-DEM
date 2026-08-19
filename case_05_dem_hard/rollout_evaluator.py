@@ -6,6 +6,11 @@ ground truth injected after the initial state. Ground truth is read only to meas
 error, so the reported values reflect accumulated drift rather than one-step accuracy.
 """
 
+# (c) All rights reserved. ECOLE POLYTECHNIQUE FEDERALE DE LAUSANNE, Switzerland,
+# Laboratory of Intelligent Maintenance and Operations Systems (IMOS), 2025.
+# Authors: Vinay Sharma and Olga Fink
+# Released under the Non-Commercial License Agreement in LICENSE.txt.
+
 import os
 import shutil
 import torch

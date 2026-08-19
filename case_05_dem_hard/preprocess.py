@@ -7,6 +7,11 @@ applies appropriate physical boundaries (cuboidal or cylindrical), and saves
 the processed sequences as serialized tensor files (.pt) for efficient training.
 """
 
+# (c) All rights reserved. ECOLE POLYTECHNIQUE FEDERALE DE LAUSANNE, Switzerland,
+# Laboratory of Intelligent Maintenance and Operations Systems (IMOS), 2025.
+# Authors: Vinay Sharma and Olga Fink
+# Released under the Non-Commercial License Agreement in LICENSE.txt.
+
 import os
 import sys
 import torch

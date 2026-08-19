@@ -12,6 +12,11 @@ Modes:
     cylinder    Extrapolation rollout in the rotating cylinder (2,073 spheres).
 """
 
+# (c) All rights reserved. ECOLE POLYTECHNIQUE FEDERALE DE LAUSANNE, Switzerland,
+# Laboratory of Intelligent Maintenance and Operations Systems (IMOS), 2025.
+# Authors: Vinay Sharma and Olga Fink
+# Released under the Non-Commercial License Agreement in LICENSE.txt.
+
 import os
 import shutil
 import torch

@@ -285,9 +285,6 @@ Remote: https://github.com/vinay-IMOSEPFL/DynamicalGraphNet-DEM.git (was empty).
 | `case_0*/saved_models/` | — | `--mode train` |
 | `case_0*/results/` | — | `--mode test` |
 
-Commit authorship: the `Co-Authored-By` trailer was removed at the author's
-request — commits are attributed solely to the researcher.
-
 ---
 
 ## 8. Reproduction run — status

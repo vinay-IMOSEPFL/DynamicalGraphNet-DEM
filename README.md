@@ -38,6 +38,7 @@ N-body experiments live in the main repository.
 - [Metrics](#metrics)
 - [Repository layout](#repository-layout)
 - [Known limitations](#known-limitations)
+- [License](#license)
 - [Citation](#citation)
 
 ---
@@ -390,7 +391,6 @@ case_05_dem_hard/              Mixed densities under gravity, plus the rotating 
 
 main_dem_simple.py             Entry point, Case 04
 main_dem_hard.py               Entry point, Case 05
-decisions.md                   Reproduction log: measurements, deviations, defects found
 ```
 
 ---
@@ -417,9 +417,6 @@ Measured, and stated so results are not over-read.
 - **A missing checkpoint does not stop evaluation.** The pipeline proceeds with random weights
   and still writes plausible-looking GIFs. Confirm the log contains
   `Loaded best validation model from ...` before treating any output as a result.
-
-`decisions.md` records the full reproduction log, including defects found in the original code
-and the measurements behind each of the points above.
 
 ---
 

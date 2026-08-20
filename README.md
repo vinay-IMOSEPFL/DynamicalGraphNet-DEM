@@ -368,6 +368,22 @@ Case 05 additionally writes absolute errors into each snapshot: `mae_pos` in mil
 Neither pipeline serialises the per-step error sequences. Capture them from the return value of
 `evaluate_rollout` if you need them.
 
+**Expect a few percent of run-to-run variation.** Impulses are scattered onto nodes with
+`index_add_`, whose CUDA accumulation order is not deterministic, and a 1499-step
+autoregressive rollout compounds that. Re-running case 04 on `case_07` three times with the
+shipped checkpoint, on one machine and with no changes, gave:
+
+| Run | Position MAE | Velocity MAE | Angular velocity MAE |
+| --- | --- | --- | --- |
+| 1 | 1.649 | 0.141 | 0.162 |
+| 2 | 1.621 | 0.136 | 0.154 |
+| 3 | 1.634 | 0.137 | 0.152 |
+
+The values in [Results](#results) are a single run and sit inside that spread. Treat them as
+accurate to about two significant figures rather than as exactly reproducible, and do not read
+small differences between methods on this benchmark as meaningful unless they exceed this
+scatter. No seed-variance study was performed for the published numbers.
+
 ---
 
 ## Repository layout

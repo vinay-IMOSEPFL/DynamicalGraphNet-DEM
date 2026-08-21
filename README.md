@@ -430,9 +430,6 @@ Measured, and stated so results are not over-read.
   a machine with many cores and little memory.
 - **Single seed.** Runs are seeded with `set_seed(100)`, but no seed-variance study was
   performed, so no error bars accompany these numbers.
-- **A missing checkpoint does not stop evaluation.** The pipeline proceeds with random weights
-  and still writes plausible-looking GIFs. Confirm the log contains
-  `Loaded best validation model from ...` before treating any output as a result.
 
 ---
 
